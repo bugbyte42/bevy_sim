@@ -60,6 +60,10 @@ The client starts with settlement inventory and an island containing forest, coa
 - `5`: generator on settlement
 - `6`: wire workshop on settlement
 - `7`: warehouse on settlement or buildable ground
+- `Space`: pause or resume the economy
+- `.`: step one economy tick while paused
+- `[` / `]`: slow down or speed up economy ticks
+- `F5`: reset the current scenario
 - `Tab`: cycle recipe graph commodity
 - `R`: cycle selected logistics route
 - `=` / `-`: increase or decrease selected route capacity

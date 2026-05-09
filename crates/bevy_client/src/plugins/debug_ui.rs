@@ -6,7 +6,9 @@ use sim_core::{
 use sim_data::{BuildOption, FacilityArchetype, Quantity, ValidatedEconomy};
 
 use crate::plugins::{
-    economy::{EconomyState, settlement_inventory, win_condition_progress},
+    economy::{
+        EconomyClock, EconomyState, run_state_label, settlement_inventory, win_condition_progress,
+    },
     logistics::{RouteSelection, selected_route_id},
     map::{IslandMap, TileKind},
     recipe_graph::RecipeGraphSelection,
@@ -77,6 +79,7 @@ fn spawn_debug_ui(mut commands: Commands) {
 
 fn update_debug_ui(
     economy: Option<Res<EconomyState>>,
+    clock: Option<Res<EconomyClock>>,
     map: Res<IslandMap>,
     graph_selection: Res<RecipeGraphSelection>,
     route_selection: Res<RouteSelection>,
@@ -89,7 +92,12 @@ fn update_debug_ui(
 
     if let Ok(mut text) = inventory_text.single_mut() {
         text.clear();
-        text.push_str(&inventory_panel(&economy, &map, &route_selection));
+        text.push_str(&inventory_panel(
+            &economy,
+            clock.as_deref(),
+            &map,
+            &route_selection,
+        ));
     }
     if let Ok(mut text) = graph_text.single_mut() {
         text.clear();
@@ -99,6 +107,7 @@ fn update_debug_ui(
 
 fn inventory_panel(
     economy: &EconomyState,
+    clock: Option<&EconomyClock>,
     map: &IslandMap,
     route_selection: &RouteSelection,
 ) -> String {
@@ -115,7 +124,12 @@ fn inventory_panel(
 
     let mut output = String::new();
     output.push_str(&format!("{}\n", economy.scenario.display_name));
-    output.push_str(&format!("tick: {}\n", economy.world.tick.0));
+    output.push_str(&format!(
+        "state: {} | tick: {} | speed: {:.2}s\n",
+        run_state_label(economy.run_state),
+        economy.world.tick.0,
+        clock.map(EconomyClock::tick_seconds).unwrap_or_default()
+    ));
     output.push_str(&format!("selected: {selected}\n"));
     for (commodity, current, target) in win_condition_progress(economy) {
         output.push_str(&format!("{commodity}: {current:.1}/{target:.1}\n"));
@@ -125,9 +139,7 @@ fn inventory_panel(
         economy.world.facilities.len(),
         economy.world.edges.len()
     ));
-    if economy.win_achieved {
-        output.push_str("state: win condition reached\n");
-    }
+    output.push_str("controls: Space pause, . step, [/] speed, F5 reset\n");
     output.push_str(&ledger_panel(economy));
     output.push_str(&route_panel(economy, route_selection));
     output.push_str(&selected_tile_panel(economy, map));

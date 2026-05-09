@@ -9,16 +9,27 @@ use sim_data::{
 };
 
 use crate::plugins::map::{
-    IslandMap, SETTLEMENT_NODE, TILE_SIZE, Tile, TileKind, facility_marker_offset,
+    FacilityMarker, IslandMap, SETTLEMENT_NODE, TILE_SIZE, Tile, TileKind, facility_marker_offset,
 };
 
 const ACTIVE_SCENARIO: &str = "scenario.copper_island.power_loop";
 const SCENARIO_ENV_VAR: &str = "BEVY_SIM_SCENARIO";
+const DEFAULT_TICK_SECONDS: f32 = 0.35;
+const MIN_TICK_SECONDS: f32 = 0.08;
+const MAX_TICK_SECONDS: f32 = 1.50;
 
 #[derive(Resource, Clone)]
 pub struct EconomySetup {
     pub data: ValidatedEconomy,
     pub scenario: Scenario,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScenarioRunState {
+    Running,
+    Paused,
+    Won,
+    ResetRequested,
 }
 
 #[derive(Resource)]
@@ -33,22 +44,51 @@ pub struct EconomyState {
     pub status_log: Vec<String>,
     pub build_counter: u64,
     pub win_achieved: bool,
+    pub run_state: ScenarioRunState,
+    pub pending_steps: u32,
 }
 
 #[derive(Resource)]
-struct EconomyClock(Timer);
+pub struct EconomyClock {
+    timer: Timer,
+    tick_seconds: f32,
+}
+
+impl EconomyClock {
+    fn new(tick_seconds: f32) -> Self {
+        Self {
+            timer: Timer::from_seconds(tick_seconds, TimerMode::Repeating),
+            tick_seconds,
+        }
+    }
+
+    pub fn tick_seconds(&self) -> f32 {
+        self.tick_seconds
+    }
+
+    fn set_tick_seconds(&mut self, tick_seconds: f32) {
+        self.tick_seconds = tick_seconds.clamp(MIN_TICK_SECONDS, MAX_TICK_SECONDS);
+        self.timer = Timer::from_seconds(self.tick_seconds, TimerMode::Repeating);
+    }
+}
 
 pub struct EconomyPlugin;
 
 impl Plugin for EconomyPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(EconomyClock(Timer::from_seconds(
-            0.35,
-            TimerMode::Repeating,
-        )))
-        .add_systems(PreStartup, load_economy_setup)
-        .add_systems(PostStartup, setup_economy)
-        .add_systems(Update, (advance_economy, build_on_selected_tile));
+        app.insert_resource(EconomyClock::new(DEFAULT_TICK_SECONDS))
+            .add_systems(PreStartup, load_economy_setup)
+            .add_systems(PostStartup, setup_economy)
+            .add_systems(
+                Update,
+                (
+                    handle_run_controls,
+                    reset_requested_scenario,
+                    advance_economy,
+                    build_on_selected_tile,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -81,7 +121,25 @@ fn load_economy_setup(mut commands: Commands) {
 fn setup_economy(mut commands: Commands, setup: Res<EconomySetup>, map: Res<IslandMap>) {
     let data = setup.data.clone();
     let scenario = setup.scenario.clone();
+    let scenario_status = format!("Scenario loaded: {}", scenario.display_name);
 
+    commands.insert_resource(EconomyState {
+        world: build_initial_world(&data, &scenario, &map),
+        data,
+        scenario,
+        produced_totals: Inventory::new(),
+        last_ledger: CommodityLedger::default(),
+        cumulative_ledger: CommodityLedger::default(),
+        last_report: Vec::new(),
+        status_log: vec![scenario_status],
+        build_counter: 0,
+        win_achieved: false,
+        run_state: ScenarioRunState::Running,
+        pending_steps: 0,
+    });
+}
+
+fn build_initial_world(data: &ValidatedEconomy, scenario: &Scenario, map: &IslandMap) -> SimWorld {
     let mut world = SimWorld::new(data.recipe_book.clone());
     for tile in &map.tiles {
         world.add_node(TransportNodeState::new(tile.node_id.clone()));
@@ -96,20 +154,85 @@ fn setup_economy(mut commands: Commands, setup: Res<EconomySetup>, map: Res<Isla
             .add(&quantity.commodity, quantity.qty)
             .expect("positive starter inventory");
     }
-    let scenario_status = format!("Scenario loaded: {}", scenario.display_name);
 
-    commands.insert_resource(EconomyState {
-        data,
-        scenario,
-        world,
-        produced_totals: Inventory::new(),
-        last_ledger: CommodityLedger::default(),
-        cumulative_ledger: CommodityLedger::default(),
-        last_report: Vec::new(),
-        status_log: vec![scenario_status],
-        build_counter: 0,
-        win_achieved: false,
-    });
+    world
+}
+
+fn handle_run_controls(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut clock: ResMut<EconomyClock>,
+    mut economy: ResMut<EconomyState>,
+) {
+    if keys.just_pressed(KeyCode::Space) {
+        economy.run_state = match economy.run_state {
+            ScenarioRunState::Running => ScenarioRunState::Paused,
+            ScenarioRunState::Paused => ScenarioRunState::Running,
+            ScenarioRunState::Won | ScenarioRunState::ResetRequested => economy.run_state,
+        };
+        let state_label = run_state_label(economy.run_state);
+        push_status(&mut economy.status_log, format!("Scenario {state_label}"));
+    }
+
+    if keys.just_pressed(KeyCode::Period) && economy.run_state != ScenarioRunState::Won {
+        economy.pending_steps += 1;
+        economy.run_state = ScenarioRunState::Paused;
+        push_status(&mut economy.status_log, "Stepping one tick".to_string());
+    }
+
+    if keys.just_pressed(KeyCode::BracketRight) {
+        let tick_seconds = clock.tick_seconds() * 0.75;
+        clock.set_tick_seconds(tick_seconds);
+        let tick_seconds = clock.tick_seconds();
+        push_status(
+            &mut economy.status_log,
+            format!("Tick speed set to {tick_seconds:.2}s"),
+        );
+    }
+
+    if keys.just_pressed(KeyCode::BracketLeft) {
+        let tick_seconds = clock.tick_seconds() / 0.75;
+        clock.set_tick_seconds(tick_seconds);
+        let tick_seconds = clock.tick_seconds();
+        push_status(
+            &mut economy.status_log,
+            format!("Tick speed set to {tick_seconds:.2}s"),
+        );
+    }
+
+    if keys.just_pressed(KeyCode::F5) {
+        economy.run_state = ScenarioRunState::ResetRequested;
+        push_status(&mut economy.status_log, "Reset requested".to_string());
+    }
+}
+
+fn reset_requested_scenario(
+    mut commands: Commands,
+    setup: Res<EconomySetup>,
+    mut map: ResMut<IslandMap>,
+    mut economy: ResMut<EconomyState>,
+    markers: Query<Entity, With<FacilityMarker>>,
+) {
+    if economy.run_state != ScenarioRunState::ResetRequested {
+        return;
+    }
+
+    for marker in &markers {
+        commands.entity(marker).despawn();
+    }
+
+    *map = IslandMap::from_scenario_layout(&setup.scenario.map_layout);
+    economy.data = setup.data.clone();
+    economy.scenario = setup.scenario.clone();
+    economy.world = build_initial_world(&economy.data, &economy.scenario, &map);
+    economy.produced_totals = Inventory::new();
+    economy.last_ledger = CommodityLedger::default();
+    economy.cumulative_ledger = CommodityLedger::default();
+    economy.last_report.clear();
+    economy.build_counter = 0;
+    economy.win_achieved = false;
+    economy.pending_steps = 0;
+    economy.run_state = ScenarioRunState::Running;
+    economy.status_log = vec![format!("Restarted {}", economy.scenario.display_name)];
 }
 
 fn advance_economy(
@@ -117,9 +240,16 @@ fn advance_economy(
     mut clock: ResMut<EconomyClock>,
     mut economy: ResMut<EconomyState>,
 ) {
-    if !clock.0.tick(time.delta()).just_finished() {
+    let timer_finished = clock.timer.tick(time.delta()).just_finished();
+    let should_tick = match economy.run_state {
+        ScenarioRunState::Running => timer_finished,
+        ScenarioRunState::Paused => economy.pending_steps > 0,
+        ScenarioRunState::Won | ScenarioRunState::ResetRequested => false,
+    };
+    if !should_tick {
         return;
     }
+    economy.pending_steps = economy.pending_steps.saturating_sub(1);
 
     let report = economy.world.tick();
     economy.last_ledger = report.ledger.clone();
@@ -143,6 +273,7 @@ fn advance_economy(
 
     if !economy.win_achieved && win_conditions_met(&economy) {
         economy.win_achieved = true;
+        economy.run_state = ScenarioRunState::Won;
         push_status(
             &mut economy.status_log,
             "Win condition reached: power and wire targets met".to_string(),
@@ -180,6 +311,12 @@ fn build_on_selected_tile(
     let Some(tile) = map.tile(selected).cloned() else {
         return;
     };
+    if matches!(
+        economy.run_state,
+        ScenarioRunState::Won | ScenarioRunState::ResetRequested
+    ) {
+        return;
+    }
     let Some(build_option) = requested_build(&keys, &tile, &economy.scenario) else {
         return;
     };
@@ -330,6 +467,15 @@ fn push_status(status_log: &mut Vec<String>, message: String) {
     }
 }
 
+pub fn run_state_label(run_state: ScenarioRunState) -> &'static str {
+    match run_state {
+        ScenarioRunState::Running => "running",
+        ScenarioRunState::Paused => "paused",
+        ScenarioRunState::Won => "won",
+        ScenarioRunState::ResetRequested => "resetting",
+    }
+}
+
 fn requested_build(
     keys: &ButtonInput<KeyCode>,
     tile: &Tile,
@@ -419,4 +565,30 @@ pub fn win_condition_progress(economy: &EconomyState) -> Vec<(CommodityId, f64, 
             (condition.commodity.clone(), current, condition.qty)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initial_world_loads_scenario_inventory() {
+        let data = sample_copper_island().unwrap();
+        let scenario = data
+            .scenarios_by_id
+            .get(ACTIVE_SCENARIO)
+            .expect("sample data includes active scenario");
+        let map = IslandMap::from_scenario_layout(&scenario.map_layout);
+
+        let world = build_initial_world(&data, scenario, &map);
+        let settlement = TransportNodeId::from(SETTLEMENT_NODE);
+        let inventory = world
+            .node_inventory(&settlement)
+            .expect("settlement inventory exists");
+
+        assert_eq!(world.tick.0, 0);
+        assert_eq!(world.facilities.len(), 0);
+        assert_eq!(inventory.get(&CommodityId::from("resource.wood")), 90.0);
+        assert_eq!(inventory.get(&CommodityId::from("resource.coal")), 10.0);
+    }
 }
