@@ -80,3 +80,11 @@ Set `BEVY_SIM_SCENARIO=scenario.copper_island.logistics_squeeze` before running 
 Set `BEVY_SIM_SCENARIO=scenario.copper_island.steel_gate` to try the advanced sandbox with iron, limestone, steel, machine parts, and a generator upgrade objective.
 
 `data/canonical/v0/world_regions.json` is the first Mini Earth workbench output. It is generated from a Natural Earth-style 1:110m countries GeoJSON with `tools/python/prepare_world_geometry.py` and is inspectable with `economy_inspect world-map`; it is not connected to the island economy yet.
+
+Launch the static geometry viewer with:
+
+```bash
+BEVY_SIM_VIEW=world cargo run -p bevy_client
+```
+
+World mode renders the checked-in country outlines with a simple equirectangular projection. It supports pan/zoom, hover/select by region bounding box, and an inspector panel with id, name, ISO code, centroid, tags, and placeholder resource summary. The island economy remains the default mode.

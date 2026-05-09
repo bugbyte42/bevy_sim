@@ -72,6 +72,12 @@ python tools/python/prepare_world_geometry.py \
   --output data/canonical/v0/world_regions.json
 ```
 
+The Bevy client can render this file as a standalone workbench without running the island economy:
+
+```bash
+BEVY_SIM_VIEW=world cargo run -p bevy_client
+```
+
 ## Extension Direction
 
 Prefer adding optional fields or new versioned files over changing existing meanings. The expected future path is:
