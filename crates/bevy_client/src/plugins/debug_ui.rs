@@ -7,8 +7,8 @@ use sim_data::{BuildOption, FacilityArchetype, Quantity, ValidatedEconomy};
 
 use crate::plugins::{
     economy::{
-        BuildActionRequests, EconomyClock, EconomyState, run_state_label, settlement_inventory,
-        win_condition_progress,
+        BuildActionRequests, EconomyClock, EconomyState, RunSummary, run_state_label,
+        settlement_inventory, win_condition_progress,
     },
     logistics::{RouteSelection, selected_route_id},
     map::{IslandMap, TileKind},
@@ -377,6 +377,9 @@ fn inventory_panel(
         economy.world.edges.len()
     ));
     output.push_str("controls: Space pause, . step, [/] speed, F5 reset\n");
+    if let Some(summary) = &economy.run_summary {
+        output.push_str(&run_summary_panel(&economy.data, summary));
+    }
     output.push_str(&ledger_panel(economy));
     output.push_str(&route_panel(economy, route_selection));
     output.push_str(&selected_tile_panel(economy, map));
@@ -410,6 +413,59 @@ fn inventory_panel(
     }
 
     output
+}
+
+fn run_summary_panel(economy: &ValidatedEconomy, summary: &RunSummary) -> String {
+    let mut output = String::new();
+    output.push_str("\nRun complete\n");
+    output.push_str(&format!(
+        "finished at tick {} | facilities {} | routes {}\n",
+        summary.completed_tick, summary.facilities_built, summary.routes_created
+    ));
+    output.push_str("objectives\n");
+    for (commodity, current, target) in &summary.win_progress {
+        output.push_str(&format!(
+            "- {} {:.1}/{:.1}\n",
+            display_commodity(economy, commodity),
+            current,
+            target
+        ));
+    }
+    append_summary_stacks(&mut output, economy, "top produced", &summary.produced);
+    append_summary_stacks(
+        &mut output,
+        economy,
+        "final settlement stock",
+        &summary.final_inventory,
+    );
+    append_summary_stacks(
+        &mut output,
+        economy,
+        "observed bottlenecks",
+        &summary.bottlenecks,
+    );
+    output
+}
+
+fn append_summary_stacks(
+    output: &mut String,
+    economy: &ValidatedEconomy,
+    label: &str,
+    stacks: &[Stack],
+) {
+    output.push_str(label);
+    output.push('\n');
+    if stacks.is_empty() {
+        output.push_str("- none\n");
+        return;
+    }
+    for stack in stacks.iter().take(4) {
+        output.push_str(&format!(
+            "- {} {:.1}\n",
+            display_commodity(economy, &stack.commodity),
+            stack.qty
+        ));
+    }
 }
 
 fn route_panel(economy: &EconomyState, selection: &RouteSelection) -> String {

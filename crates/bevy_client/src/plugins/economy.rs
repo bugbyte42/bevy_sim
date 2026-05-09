@@ -32,6 +32,17 @@ pub enum ScenarioRunState {
     ResetRequested,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct RunSummary {
+    pub completed_tick: u64,
+    pub facilities_built: usize,
+    pub routes_created: usize,
+    pub win_progress: Vec<(CommodityId, f64, f64)>,
+    pub produced: Vec<Stack>,
+    pub final_inventory: Vec<Stack>,
+    pub bottlenecks: Vec<Stack>,
+}
+
 #[derive(Resource)]
 pub struct EconomyState {
     pub data: ValidatedEconomy,
@@ -46,6 +57,7 @@ pub struct EconomyState {
     pub win_achieved: bool,
     pub run_state: ScenarioRunState,
     pub pending_steps: u32,
+    pub run_summary: Option<RunSummary>,
 }
 
 #[derive(Resource, Default)]
@@ -142,6 +154,7 @@ fn setup_economy(mut commands: Commands, setup: Res<EconomySetup>, map: Res<Isla
         win_achieved: false,
         run_state: ScenarioRunState::Running,
         pending_steps: 0,
+        run_summary: None,
     });
 }
 
@@ -237,6 +250,7 @@ fn reset_requested_scenario(
     economy.build_counter = 0;
     economy.win_achieved = false;
     economy.pending_steps = 0;
+    economy.run_summary = None;
     economy.run_state = ScenarioRunState::Running;
     economy.status_log = vec![format!("Restarted {}", economy.scenario.display_name)];
 }
@@ -278,8 +292,10 @@ fn advance_economy(
     }
 
     if !economy.win_achieved && win_conditions_met(&economy) {
+        let summary = build_run_summary(&economy);
         economy.win_achieved = true;
         economy.run_state = ScenarioRunState::Won;
+        economy.run_summary = Some(summary);
         push_status(
             &mut economy.status_log,
             "Win condition reached: power and wire targets met".to_string(),
@@ -590,6 +606,39 @@ pub fn win_condition_progress(economy: &EconomyState) -> Vec<(CommodityId, f64, 
         .collect()
 }
 
+fn build_run_summary(economy: &EconomyState) -> RunSummary {
+    let final_inventory = settlement_inventory(economy)
+        .map(|inventory| collect_top_stacks(inventory.iter(), 8))
+        .unwrap_or_default();
+    RunSummary {
+        completed_tick: economy.world.tick.0,
+        facilities_built: economy.world.facilities.len(),
+        routes_created: economy.world.edges.len(),
+        win_progress: win_condition_progress(economy),
+        produced: collect_top_stacks(economy.cumulative_ledger.produced(), 8),
+        final_inventory,
+        bottlenecks: collect_top_stacks(economy.cumulative_ledger.blocked_demand(), 8),
+    }
+}
+
+fn collect_top_stacks<'a>(
+    quantities: impl Iterator<Item = (&'a CommodityId, f64)>,
+    limit: usize,
+) -> Vec<Stack> {
+    let mut stacks: Vec<_> = quantities
+        .map(|(commodity, qty)| Stack::new(commodity.clone(), qty))
+        .collect();
+    stacks.sort_by(|left, right| {
+        right
+            .qty
+            .partial_cmp(&left.qty)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.commodity.cmp(&right.commodity))
+    });
+    stacks.truncate(limit);
+    stacks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -613,5 +662,63 @@ mod tests {
         assert_eq!(world.facilities.len(), 0);
         assert_eq!(inventory.get(&CommodityId::from("resource.wood")), 90.0);
         assert_eq!(inventory.get(&CommodityId::from("resource.coal")), 10.0);
+    }
+
+    #[test]
+    fn run_summary_captures_core_counts_and_ledgers() {
+        let data = sample_copper_island().unwrap();
+        let scenario = data
+            .scenarios_by_id
+            .get(ACTIVE_SCENARIO)
+            .cloned()
+            .expect("sample data includes active scenario");
+        let map = IslandMap::from_scenario_layout(&scenario.map_layout);
+        let mut economy = EconomyState {
+            world: build_initial_world(&data, &scenario, &map),
+            data,
+            scenario,
+            produced_totals: Inventory::new(),
+            last_ledger: CommodityLedger::default(),
+            cumulative_ledger: CommodityLedger::default(),
+            last_report: Vec::new(),
+            status_log: Vec::new(),
+            build_counter: 0,
+            win_achieved: false,
+            run_state: ScenarioRunState::Running,
+            pending_steps: 0,
+            run_summary: None,
+        };
+        economy
+            .produced_totals
+            .add(&CommodityId::from("energy.electricity"), 100.0)
+            .unwrap();
+        economy
+            .produced_totals
+            .add(&CommodityId::from("component.copper_wire"), 25.0)
+            .unwrap();
+        economy
+            .cumulative_ledger
+            .record_produced(&CommodityId::from("energy.electricity"), 100.0);
+        economy
+            .cumulative_ledger
+            .record_blocked_demand(&CommodityId::from("ore.copper"), 4.0);
+
+        let summary = build_run_summary(&economy);
+
+        assert_eq!(summary.completed_tick, 0);
+        assert_eq!(summary.facilities_built, 0);
+        assert_eq!(summary.routes_created, 0);
+        assert!(
+            summary
+                .produced
+                .iter()
+                .any(|stack| stack.commodity == CommodityId::from("energy.electricity"))
+        );
+        assert!(
+            summary
+                .bottlenecks
+                .iter()
+                .any(|stack| stack.commodity == CommodityId::from("ore.copper"))
+        );
     }
 }

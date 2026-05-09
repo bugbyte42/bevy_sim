@@ -71,6 +71,7 @@ The client starts with settlement inventory and an island containing forest, coa
 The selected tile panel also exposes clickable build actions for valid facilities, so the number keys are shortcuts rather than the only way to play.
 
 Resource extraction facilities output to their tile node. A low-capacity route moves goods back to the settlement, which makes transport bottlenecks visible before individual vehicles exist.
+When the win condition is reached, the left panel shows a run summary with completion tick, facilities, routes, produced goods, final settlement stock, and observed bottlenecks.
 
 The map layout, starter inventory, win condition, and build options now live in `data/canonical/v0/scenarios.json`.
 Set `BEVY_SIM_SCENARIO=scenario.copper_island.logistics_squeeze` before running the client to try the tighter logistics variant.
