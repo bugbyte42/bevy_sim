@@ -33,6 +33,14 @@ The first Bevy compile can take a while.
 
 The schema shape is summarized in [docs/canonical_schema.md](docs/canonical_schema.md), and the commit/review rhythm is in [docs/workflow.md](docs/workflow.md).
 
+You can inspect the canonical tutorial data without launching Bevy:
+
+```bash
+cargo run -p sim_data --bin economy_inspect -- scenario
+cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
+cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
+```
+
 ## Copper Island Prototype
 
 Goal:

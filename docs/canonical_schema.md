@@ -58,3 +58,15 @@ v2 provenance-rich ingestion outputs from the external Python pipeline
 ```
 
 The Rust boundary should remain stable: `sim_data` validates canonical entities, then converts recipes into `sim_core::RecipeBook`.
+
+## Inspection
+
+Use the headless inspector when changing canonical data:
+
+```bash
+cargo run -p sim_data --bin economy_inspect -- scenario
+cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
+cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
+```
+
+This is intentionally lightweight: it is a quick review aid, not a replacement for the Bevy client.

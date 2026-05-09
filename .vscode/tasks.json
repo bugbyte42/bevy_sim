@@ -33,6 +33,23 @@
       "group": "build",
       "problemMatcher": ["$rustc"],
       "isBackground": false
+    },
+    {
+      "label": "inspect scenario",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "run",
+        "-p",
+        "sim_data",
+        "--bin",
+        "economy_inspect",
+        "--",
+        "scenario"
+      ],
+      "group": "test",
+      "problemMatcher": ["$rustc"],
+      "isBackground": false
     }
   ]
 }
