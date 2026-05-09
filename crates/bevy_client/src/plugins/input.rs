@@ -22,8 +22,18 @@ fn update_hovered_tile(
         .and_then(|world_pos| map.tile_at_world_pos(world_pos));
 }
 
-fn select_tile(buttons: Res<ButtonInput<MouseButton>>, mut map: ResMut<IslandMap>) {
+fn select_tile(
+    buttons: Res<ButtonInput<MouseButton>>,
+    ui_buttons: Query<&Interaction, With<Button>>,
+    mut map: ResMut<IslandMap>,
+) {
     if buttons.just_pressed(MouseButton::Left) {
+        if ui_buttons
+            .iter()
+            .any(|interaction| *interaction != Interaction::None)
+        {
+            return;
+        }
         map.selected = map.hovered;
     }
 }

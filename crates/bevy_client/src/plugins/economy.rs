@@ -48,6 +48,11 @@ pub struct EconomyState {
     pub pending_steps: u32,
 }
 
+#[derive(Resource, Default)]
+pub struct BuildActionRequests {
+    pub labels: Vec<String>,
+}
+
 #[derive(Resource)]
 pub struct EconomyClock {
     timer: Timer,
@@ -77,6 +82,7 @@ pub struct EconomyPlugin;
 impl Plugin for EconomyPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(EconomyClock::new(DEFAULT_TICK_SECONDS))
+            .init_resource::<BuildActionRequests>()
             .add_systems(PreStartup, load_economy_setup)
             .add_systems(PostStartup, setup_economy)
             .add_systems(
@@ -302,6 +308,7 @@ fn fold_ledger(total: &mut CommodityLedger, tick: &CommodityLedger) {
 fn build_on_selected_tile(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
+    mut build_actions: ResMut<BuildActionRequests>,
     mut map: ResMut<IslandMap>,
     mut economy: ResMut<EconomyState>,
 ) {
@@ -315,9 +322,11 @@ fn build_on_selected_tile(
         economy.run_state,
         ScenarioRunState::Won | ScenarioRunState::ResetRequested
     ) {
+        build_actions.labels.clear();
         return;
     }
-    let Some(build_option) = requested_build(&keys, &tile, &economy.scenario) else {
+    let Some(build_option) = requested_build(&keys, &mut build_actions, &tile, &economy.scenario)
+    else {
         return;
     };
 
@@ -478,10 +487,11 @@ pub fn run_state_label(run_state: ScenarioRunState) -> &'static str {
 
 fn requested_build(
     keys: &ButtonInput<KeyCode>,
+    build_actions: &mut BuildActionRequests,
     tile: &Tile,
     scenario: &Scenario,
 ) -> Option<BuildOption> {
-    scenario
+    let keyboard_build = scenario
         .build_options
         .iter()
         .find(|build_option| {
@@ -495,7 +505,20 @@ fn requested_build(
                 .iter()
                 .find(|build_option| key_just_pressed(keys, &build_option.key))
                 .cloned()
-        })
+        });
+    if keyboard_build.is_some() {
+        build_actions.labels.clear();
+        return keyboard_build;
+    }
+
+    let requested_labels = std::mem::take(&mut build_actions.labels);
+    requested_labels.into_iter().find_map(|label| {
+        scenario
+            .build_options
+            .iter()
+            .find(|build_option| build_option.label == label)
+            .cloned()
+    })
 }
 
 fn key_just_pressed(keys: &ButtonInput<KeyCode>, key: &str) -> bool {

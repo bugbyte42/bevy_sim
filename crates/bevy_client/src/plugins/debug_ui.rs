@@ -7,12 +7,19 @@ use sim_data::{BuildOption, FacilityArchetype, Quantity, ValidatedEconomy};
 
 use crate::plugins::{
     economy::{
-        EconomyClock, EconomyState, run_state_label, settlement_inventory, win_condition_progress,
+        BuildActionRequests, EconomyClock, EconomyState, run_state_label, settlement_inventory,
+        win_condition_progress,
     },
     logistics::{RouteSelection, selected_route_id},
     map::{IslandMap, TileKind},
     recipe_graph::RecipeGraphSelection,
 };
+
+const MAX_BUILD_ACTIONS: usize = 10;
+const ACTION_READY: Color = Color::srgb(0.18, 0.34, 0.28);
+const ACTION_HOVERED: Color = Color::srgb(0.24, 0.43, 0.36);
+const ACTION_PRESSED: Color = Color::srgb(0.38, 0.62, 0.42);
+const ACTION_BLOCKED: Color = Color::srgb(0.13, 0.14, 0.14);
 
 #[derive(Component)]
 struct InventoryText;
@@ -20,12 +27,55 @@ struct InventoryText;
 #[derive(Component)]
 struct GraphText;
 
+#[derive(Component)]
+struct BuildActionButton {
+    label: Option<String>,
+    enabled: bool,
+}
+
+#[derive(Component)]
+struct BuildActionButtonText {
+    slot: usize,
+}
+
+type BuildActionButtonInteractions<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static BuildActionButton,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+    ),
+    (Changed<Interaction>, With<Button>),
+>;
+
+type BuildActionButtonViews<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut BuildActionButton,
+        &'static mut Node,
+        &'static mut BackgroundColor,
+        &'static Interaction,
+    ),
+>;
+
+type BuildActionButtonTexts<'w, 's> =
+    Query<'w, 's, (&'static BuildActionButtonText, &'static mut Text)>;
+
 pub struct DebugUiPlugin;
 
 impl Plugin for DebugUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_debug_ui)
-            .add_systems(Update, update_debug_ui);
+        app.add_systems(Startup, spawn_debug_ui).add_systems(
+            Update,
+            (
+                handle_build_action_buttons,
+                update_debug_text,
+                update_build_action_ui,
+            ),
+        );
     }
 }
 
@@ -58,26 +108,92 @@ fn spawn_debug_ui(mut commands: Commands) {
                 BackgroundColor(Color::srgba(0.04, 0.05, 0.05, 0.82)),
                 InventoryText,
             ));
-            root.spawn((
-                Text::new("recipe graph"),
-                TextFont {
-                    font_size: 14.0,
-                    ..default()
-                },
-                TextColor(Color::srgb(0.90, 0.92, 0.96)),
-                TextLayout::new_with_justify(Justify::Left),
-                Node {
-                    max_width: px(420),
-                    padding: UiRect::all(px(10)),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.04, 0.05, 0.06, 0.82)),
-                GraphText,
-            ));
+            root.spawn((Node {
+                width: px(430),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(10),
+                ..default()
+            },))
+                .with_children(|right| {
+                    spawn_build_actions(right);
+                    right.spawn((
+                        Text::new("recipe graph"),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.90, 0.92, 0.96)),
+                        TextLayout::new_with_justify(Justify::Left),
+                        Node {
+                            max_width: px(420),
+                            padding: UiRect::all(px(10)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(0.04, 0.05, 0.06, 0.82)),
+                        GraphText,
+                    ));
+                });
         });
 }
 
-fn update_debug_ui(
+fn spawn_build_actions(parent: &mut ChildSpawnerCommands) {
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(6),
+                padding: UiRect::all(px(10)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.04, 0.05, 0.05, 0.82)),
+        ))
+        .with_children(|panel| {
+            panel.spawn((
+                Text::new("Build Actions"),
+                TextFont {
+                    font_size: 15.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.94, 0.96, 0.90)),
+            ));
+            for slot in 0..MAX_BUILD_ACTIONS {
+                panel
+                    .spawn((
+                        Button,
+                        BuildActionButton {
+                            label: None,
+                            enabled: false,
+                        },
+                        Node {
+                            width: percent(100),
+                            min_height: px(30),
+                            display: Display::None,
+                            padding: UiRect::axes(px(8), px(5)),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            border: UiRect::all(px(1)),
+                            ..default()
+                        },
+                        BorderColor::all(Color::srgb(0.28, 0.34, 0.30)),
+                        BackgroundColor(ACTION_BLOCKED),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new(""),
+                            TextFont {
+                                font_size: 12.0,
+                                ..default()
+                            },
+                            TextColor(Color::srgb(0.90, 0.93, 0.88)),
+                            BuildActionButtonText { slot },
+                        ));
+                    });
+            }
+        });
+}
+
+fn update_debug_text(
     economy: Option<Res<EconomyState>>,
     clock: Option<Res<EconomyClock>>,
     map: Res<IslandMap>,
@@ -103,6 +219,127 @@ fn update_debug_ui(
         text.clear();
         text.push_str(&graph_panel(&economy, &graph_selection));
     }
+}
+
+fn update_build_action_ui(
+    economy: Option<Res<EconomyState>>,
+    map: Res<IslandMap>,
+    mut action_buttons: BuildActionButtonViews,
+    mut action_texts: BuildActionButtonTexts,
+) {
+    let Some(economy) = economy else {
+        return;
+    };
+
+    update_build_actions(&economy, &map, &mut action_buttons, &mut action_texts);
+}
+
+fn handle_build_action_buttons(
+    mut requests: ResMut<BuildActionRequests>,
+    mut buttons: BuildActionButtonInteractions,
+) {
+    for (interaction, button, mut color, mut border) in &mut buttons {
+        if !button.enabled {
+            *color = ACTION_BLOCKED.into();
+            *border = BorderColor::all(Color::srgb(0.20, 0.22, 0.20));
+            continue;
+        }
+
+        match *interaction {
+            Interaction::Pressed => {
+                if let Some(label) = &button.label {
+                    requests.labels.push(label.clone());
+                }
+                *color = ACTION_PRESSED.into();
+                *border = BorderColor::all(Color::srgb(0.86, 0.92, 0.52));
+            }
+            Interaction::Hovered => {
+                *color = ACTION_HOVERED.into();
+                *border = BorderColor::all(Color::srgb(0.70, 0.84, 0.60));
+            }
+            Interaction::None => {
+                *color = ACTION_READY.into();
+                *border = BorderColor::all(Color::srgb(0.28, 0.34, 0.30));
+            }
+        }
+    }
+}
+
+fn update_build_actions(
+    economy: &EconomyState,
+    map: &IslandMap,
+    action_buttons: &mut BuildActionButtonViews,
+    action_texts: &mut BuildActionButtonTexts,
+) {
+    let actions = selected_tile_actions(economy, map);
+
+    for (slot, (mut button, mut node, mut color, interaction)) in
+        action_buttons.iter_mut().enumerate()
+    {
+        let Some(action) = actions.get(slot) else {
+            button.label = None;
+            button.enabled = false;
+            node.display = Display::None;
+            *color = ACTION_BLOCKED.into();
+            continue;
+        };
+
+        button.label = Some(action.label.clone());
+        button.enabled = action.enabled;
+        node.display = Display::Flex;
+        *color = if action.enabled {
+            match *interaction {
+                Interaction::Pressed => ACTION_PRESSED.into(),
+                Interaction::Hovered => ACTION_HOVERED.into(),
+                Interaction::None => ACTION_READY.into(),
+            }
+        } else {
+            ACTION_BLOCKED.into()
+        };
+    }
+
+    for (text_slot, mut text) in action_texts {
+        if let Some(action) = actions.get(text_slot.slot) {
+            **text = action.text.clone();
+        } else {
+            text.clear();
+        }
+    }
+}
+
+struct BuildActionView {
+    label: String,
+    text: String,
+    enabled: bool,
+}
+
+fn selected_tile_actions(economy: &EconomyState, map: &IslandMap) -> Vec<BuildActionView> {
+    let Some(tile) = map.selected.and_then(|id| map.tile(id)) else {
+        return Vec::new();
+    };
+    let settlement = settlement_inventory(economy);
+
+    economy
+        .scenario
+        .build_options
+        .iter()
+        .filter(|option| option_allowed_on(option, tile.kind))
+        .filter_map(|option| {
+            let archetype = economy
+                .data
+                .facilities_by_id
+                .get(&option.facility_archetype)?;
+            let cost = cost_text(&economy.data, archetype);
+            let status = build_status(&economy.data, settlement, &archetype.build_cost);
+            let enabled = status == "ready";
+            Some(BuildActionView {
+                label: option.label.clone(),
+                text: format!("{} {} | {status} | cost {cost}", option.key, option.label),
+                enabled,
+            })
+        })
+        .take(MAX_BUILD_ACTIONS)
+        .collect()
 }
 
 fn inventory_panel(
