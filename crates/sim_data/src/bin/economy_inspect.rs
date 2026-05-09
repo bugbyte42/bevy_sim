@@ -25,6 +25,7 @@ fn run(args: Vec<String>) -> Result<String, String> {
     let economy = load_economy(&parsed.data_dir)?;
 
     match parsed.command {
+        Command::ListScenarios => Ok(list_scenarios(&economy)),
         Command::Scenario { scenario_id } => {
             let scenario = scenario(&economy, scenario_id.as_deref())?;
             Ok(describe_scenario(&economy, scenario))
@@ -42,6 +43,15 @@ fn run(args: Vec<String>) -> Result<String, String> {
         }
         Command::Help => Ok(usage()),
     }
+}
+
+fn list_scenarios(economy: &ValidatedEconomy) -> String {
+    let mut output = String::new();
+    writeln!(output, "Scenarios").unwrap();
+    for scenario in &economy.canonical.scenarios {
+        writeln!(output, "- {}: {}", scenario.id, scenario.display_name).unwrap();
+    }
+    output
 }
 
 fn load_economy(data_dir: &str) -> Result<ValidatedEconomy, String> {
@@ -220,6 +230,7 @@ struct Args {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Command {
+    ListScenarios,
     Scenario {
         scenario_id: Option<String>,
     },
@@ -252,6 +263,7 @@ impl Args {
 
         let command = match rest.first().map(String::as_str) {
             None | Some("help") | Some("--help") | Some("-h") => Command::Help,
+            Some("list-scenarios") => Command::ListScenarios,
             Some("scenario") => Command::Scenario {
                 scenario_id: rest.get(1).cloned(),
             },
@@ -278,6 +290,7 @@ impl Args {
 fn usage() -> String {
     [
         "Usage:",
+        "  cargo run -p sim_data --bin economy_inspect -- list-scenarios",
         "  cargo run -p sim_data --bin economy_inspect -- scenario [scenario_id]",
         "  cargo run -p sim_data --bin economy_inspect -- commodity <commodity_id>",
         "  cargo run -p sim_data --bin economy_inspect -- recipe <recipe_id> [scenario_id]",
@@ -322,6 +335,14 @@ mod tests {
                 }
             }
         );
+    }
+
+    #[test]
+    fn lists_scenarios() {
+        let output = run(vec!["list-scenarios".to_string()]).unwrap();
+
+        assert!(output.contains("scenario.copper_island.power_loop"));
+        assert!(output.contains("scenario.copper_island.logistics_squeeze"));
     }
 
     #[test]

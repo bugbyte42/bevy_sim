@@ -37,6 +37,7 @@ You can inspect the canonical tutorial data without launching Bevy:
 
 ```bash
 cargo run -p sim_data --bin economy_inspect -- scenario
+cargo run -p sim_data --bin economy_inspect -- list-scenarios
 cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
 ```
@@ -65,3 +66,4 @@ The client starts with settlement inventory and an island containing forest, coa
 Resource extraction facilities output to their tile node. A low-capacity route moves goods back to the settlement, which makes transport bottlenecks visible before individual vehicles exist.
 
 The starter inventory, win condition, and build options now live in `data/canonical/v0/scenarios.json`.
+Set `BEVY_SIM_SCENARIO=scenario.copper_island.logistics_squeeze` before running the client to try the tighter logistics variant.

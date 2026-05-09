@@ -13,6 +13,7 @@ use crate::plugins::map::{
 };
 
 const ACTIVE_SCENARIO: &str = "scenario.copper_island.power_loop";
+const SCENARIO_ENV_VAR: &str = "BEVY_SIM_SCENARIO";
 
 #[derive(Resource)]
 pub struct EconomyState {
@@ -52,12 +53,20 @@ fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
             sample_copper_island().expect("bundled canonical data should validate")
         }
     };
+    let requested_scenario =
+        std::env::var(SCENARIO_ENV_VAR).unwrap_or_else(|_| ACTIVE_SCENARIO.to_string());
     let scenario = data
         .scenarios_by_id
-        .get(ACTIVE_SCENARIO)
+        .get(&requested_scenario)
         .cloned()
         .or_else(|| data.canonical.scenarios.first().cloned())
         .expect("canonical data should define at least one scenario");
+    if scenario.id != requested_scenario {
+        warn!(
+            "requested scenario {requested_scenario} was not found, using {}",
+            scenario.id
+        );
+    }
 
     let mut world = SimWorld::new(data.recipe_book.clone());
     for tile in &map.tiles {
@@ -73,6 +82,7 @@ fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
             .add(&quantity.commodity, quantity.qty)
             .expect("positive starter inventory");
     }
+    let scenario_status = format!("Scenario loaded: {}", scenario.display_name);
 
     commands.insert_resource(EconomyState {
         data,
@@ -82,7 +92,7 @@ fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
         last_ledger: CommodityLedger::default(),
         cumulative_ledger: CommodityLedger::default(),
         last_report: Vec::new(),
-        status_log: vec!["Copper Island initialized".to_string()],
+        status_log: vec![scenario_status],
         build_counter: 0,
         win_achieved: false,
     });

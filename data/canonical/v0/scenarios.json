@@ -118,5 +118,125 @@
     "source_refs": [],
     "confidence": "medium",
     "authored_status": "hand_authored"
+  },
+  {
+    "id": "scenario.copper_island.logistics_squeeze",
+    "display_name": "Copper Island Logistics Squeeze",
+    "region": "region.copper_island",
+    "starting_inventory": [
+      { "commodity": "resource.wood", "qty": 60.0 },
+      { "commodity": "resource.water", "qty": 80.0 },
+      { "commodity": "resource.coal", "qty": 2.0 },
+      { "commodity": "food.basic", "qty": 30.0 },
+      { "commodity": "labor.basic", "qty": 20.0 }
+    ],
+    "win_conditions": [
+      {
+        "commodity": "energy.electricity",
+        "qty": 60.0,
+        "metric": "produced_total"
+      },
+      {
+        "commodity": "component.copper_wire",
+        "qty": 15.0,
+        "metric": "produced_total"
+      }
+    ],
+    "build_options": [
+      {
+        "key": "Digit1",
+        "label": "camp",
+        "facility_archetype": "facility.camp.tier1",
+        "active_recipe": "recipe.gather_wood.v1",
+        "allowed_tile_kinds": ["forest"],
+        "transport_output": "resource.wood",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "coal mine",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_coal.v1",
+        "allowed_tile_kinds": ["coal"],
+        "transport_output": "resource.coal",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "copper mine",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_copper_ore.v1",
+        "allowed_tile_kinds": ["copper"],
+        "transport_output": "ore.copper",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "iron mine",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_iron_ore.v1",
+        "allowed_tile_kinds": ["iron"],
+        "transport_output": "ore.iron",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "limestone quarry",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.quarry_limestone.v1",
+        "allowed_tile_kinds": ["limestone"],
+        "transport_output": "mineral.limestone",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit3",
+        "label": "heat furnace",
+        "facility_archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.burn_coal_for_heat.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit4",
+        "label": "copper furnace",
+        "facility_archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.smelt_copper.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit5",
+        "label": "generator",
+        "facility_archetype": "facility.generator.tier1",
+        "active_recipe": "recipe.generate_electricity_from_heat.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit6",
+        "label": "wire workshop",
+        "facility_archetype": "facility.workshop.tier1",
+        "active_recipe": "recipe.draw_copper_wire.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit7",
+        "label": "warehouse",
+        "facility_archetype": "facility.warehouse.tier1",
+        "active_recipe": null,
+        "allowed_tile_kinds": ["settlement", "buildable"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      }
+    ],
+    "tags": ["tutorial", "phase1", "logistics", "constraint"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
   }
 ]
