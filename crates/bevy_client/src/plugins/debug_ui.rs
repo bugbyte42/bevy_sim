@@ -408,13 +408,18 @@ fn graph_panel(economy: &EconomyState, selection: &RecipeGraphSelection) -> Stri
     let links = economy.world.recipe_book.links_for(commodity);
     let mut output = String::new();
     output.push_str("Recipe Graph\n");
-    output.push_str(&format!("commodity: {commodity}\n\n"));
+    output.push_str(&format!(
+        "commodity: {} ({commodity})\n",
+        display_commodity(&economy.data, commodity)
+    ));
+    output.push_str(&selected_commodity_status(economy, commodity));
+    output.push('\n');
     output.push_str("produced by\n");
-    append_recipe_ids(&mut output, &links.produced_by);
+    append_recipe_statuses(&mut output, economy, &links.produced_by);
     output.push_str("\nrequires\n");
-    append_recipe_ids(&mut output, &links.required_by);
+    append_recipe_statuses(&mut output, economy, &links.required_by);
     output.push_str("\nbyproduct of\n");
-    append_recipe_ids(&mut output, &links.byproduct_of);
+    append_recipe_statuses(&mut output, economy, &links.byproduct_of);
 
     if let Some(recipe_id) = links.produced_by.first() {
         output.push_str("\nblocking first producer\n");
@@ -437,6 +442,28 @@ fn graph_panel(economy: &EconomyState, selection: &RecipeGraphSelection) -> Stri
     output
 }
 
+fn selected_commodity_status(economy: &EconomyState, commodity: &CommodityId) -> String {
+    let settlement_qty = settlement_inventory(economy)
+        .map(|inventory| inventory.get(commodity))
+        .unwrap_or_default();
+    let produced = economy.last_ledger.produced_qty(commodity);
+    let moved = economy.last_ledger.moved_in_qty(commodity);
+    let consumed = economy.last_ledger.consumed_qty(commodity);
+    let blocked = economy.last_ledger.blocked_demand_qty(commodity);
+
+    let mut output = String::new();
+    output.push_str(&format!("settlement stock: {settlement_qty:.1}\n"));
+    output.push_str(&format!(
+        "last tick: +{produced:.1} produced, +{moved:.1} moved, -{consumed:.1} consumed\n"
+    ));
+    if blocked > 0.0 {
+        output.push_str(&format!("blocked demand: {blocked:.1}\n"));
+    } else {
+        output.push_str("blocked demand: none\n");
+    }
+    output
+}
+
 fn display_commodity(economy: &ValidatedEconomy, commodity: &CommodityId) -> String {
     economy
         .commodities_by_id
@@ -453,14 +480,30 @@ fn display_recipe(economy: &ValidatedEconomy, recipe: &RecipeId) -> String {
         .unwrap_or_else(|| recipe.to_string())
 }
 
-fn append_recipe_ids(output: &mut String, recipes: &[RecipeId]) {
+fn append_recipe_statuses(output: &mut String, economy: &EconomyState, recipes: &[RecipeId]) {
     if recipes.is_empty() {
         output.push_str("none\n");
         return;
     }
     for recipe in recipes {
-        output.push_str(recipe.as_str());
-        output.push('\n');
+        let label = display_recipe(&economy.data, recipe);
+        if let Some(inventory) = settlement_inventory(economy) {
+            let blockers = economy
+                .world
+                .recipe_book
+                .blocked_reasons_for(recipe, inventory);
+            if blockers.is_empty() {
+                output.push_str(&format!("- {label}: ready\n"));
+            } else {
+                let blocker = blockers
+                    .first()
+                    .map(|blocker| format_blocker(economy, blocker))
+                    .unwrap_or_else(|| "unknown".to_string());
+                output.push_str(&format!("- {label}: blocked ({blocker})\n"));
+            }
+        } else {
+            output.push_str(&format!("- {label}: no settlement inventory\n"));
+        }
     }
 }
 
