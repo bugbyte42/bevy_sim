@@ -1,6 +1,7 @@
 use sim_core::{CommodityId, Inventory, RecipeId, Stack};
 use sim_data::{
-    DataLoadError, Scenario, ValidatedEconomy, load_canonical_dir, sample_copper_island,
+    DataLoadError, Scenario, ValidatedEconomy, WorldRegion, load_canonical_dir,
+    sample_copper_island,
 };
 use std::{collections::BTreeMap, env, fmt::Write, process::ExitCode};
 
@@ -34,6 +35,7 @@ fn run(args: Vec<String>) -> Result<String, String> {
             let scenario = scenario(&economy, scenario_id.as_deref())?;
             Ok(describe_map(scenario))
         }
+        Command::WorldMap => Ok(describe_world_map(&economy)),
         Command::Commodity { commodity_id } => Ok(describe_commodity(
             &economy,
             &CommodityId::from(commodity_id),
@@ -234,6 +236,57 @@ fn describe_map(scenario: &Scenario) -> String {
     output
 }
 
+fn describe_world_map(economy: &ValidatedEconomy) -> String {
+    let mut output = String::new();
+    writeln!(output, "World Map").unwrap();
+    writeln!(output, "regions: {}", economy.canonical.world_regions.len()).unwrap();
+    if let Some((min_lon, min_lat, max_lon, max_lat)) =
+        world_bounds(&economy.canonical.world_regions)
+    {
+        writeln!(
+            output,
+            "bounds: lon {min_lon:.2}..{max_lon:.2}, lat {min_lat:.2}..{max_lat:.2}"
+        )
+        .unwrap();
+    }
+
+    writeln!(output, "\nSample Regions").unwrap();
+    for region in economy.canonical.world_regions.iter().take(8) {
+        writeln!(
+            output,
+            "- {}: {} ({}) centroid {:.2},{:.2}",
+            region.id, region.display_name, region.iso_a3, region.centroid_lon, region.centroid_lat
+        )
+        .unwrap();
+    }
+
+    output
+}
+
+fn world_bounds(regions: &[WorldRegion]) -> Option<(f64, f64, f64, f64)> {
+    let mut min_lon = f64::INFINITY;
+    let mut min_lat = f64::INFINITY;
+    let mut max_lon = f64::NEG_INFINITY;
+    let mut max_lat = f64::NEG_INFINITY;
+    let mut saw_point = false;
+
+    for region in regions {
+        for polygon in &region.geometry {
+            for ring in polygon {
+                for [lon, lat] in ring {
+                    min_lon = min_lon.min(*lon);
+                    min_lat = min_lat.min(*lat);
+                    max_lon = max_lon.max(*lon);
+                    max_lat = max_lat.max(*lat);
+                    saw_point = true;
+                }
+            }
+        }
+    }
+
+    saw_point.then_some((min_lon, min_lat, max_lon, max_lat))
+}
+
 fn tile_glyph(tile_kind: &str) -> char {
     match tile_kind {
         "water" => '~',
@@ -353,6 +406,7 @@ enum Command {
     Map {
         scenario_id: Option<String>,
     },
+    WorldMap,
     Commodity {
         commodity_id: String,
     },
@@ -389,6 +443,7 @@ impl Args {
             Some("map") => Command::Map {
                 scenario_id: rest.get(1).cloned(),
             },
+            Some("world-map") => Command::WorldMap,
             Some("commodity") => Command::Commodity {
                 commodity_id: rest
                     .get(1)
@@ -415,6 +470,7 @@ fn usage() -> String {
         "  cargo run -p sim_data --bin economy_inspect -- list-scenarios",
         "  cargo run -p sim_data --bin economy_inspect -- scenario [scenario_id]",
         "  cargo run -p sim_data --bin economy_inspect -- map [scenario_id]",
+        "  cargo run -p sim_data --bin economy_inspect -- world-map",
         "  cargo run -p sim_data --bin economy_inspect -- commodity <commodity_id>",
         "  cargo run -p sim_data --bin economy_inspect -- recipe <recipe_id> [scenario_id]",
         "",
@@ -481,6 +537,17 @@ mod tests {
         assert!(output.contains("Preview"));
         assert!(output.contains("@ initial selected tile"));
         assert!(output.contains("- settlement: 1"));
+    }
+
+    #[test]
+    fn world_map_output_mentions_counts_bounds_and_samples() {
+        let output = run(vec!["world-map".to_string()]).unwrap();
+
+        assert!(output.contains("World Map"));
+        assert!(output.contains("regions:"));
+        assert!(output.contains("bounds: lon"));
+        assert!(output.contains("Sample Regions"));
+        assert!(output.contains("world."));
     }
 
     #[test]

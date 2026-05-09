@@ -40,6 +40,7 @@ cargo run -p sim_data --bin economy_inspect -- scenario
 cargo run -p sim_data --bin economy_inspect -- list-scenarios
 cargo run -p sim_data --bin economy_inspect -- map scenario.copper_island.logistics_squeeze
 cargo run -p sim_data --bin economy_inspect -- scenario scenario.copper_island.steel_gate
+cargo run -p sim_data --bin economy_inspect -- world-map
 cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
 ```
@@ -77,3 +78,5 @@ When the win condition is reached, the left panel shows a run summary with compl
 The map layout, starter inventory, win condition, and build options now live in `data/canonical/v0/scenarios.json`.
 Set `BEVY_SIM_SCENARIO=scenario.copper_island.logistics_squeeze` before running the client to try the tighter logistics variant.
 Set `BEVY_SIM_SCENARIO=scenario.copper_island.steel_gate` to try the advanced sandbox with iron, limestone, steel, machine parts, and a generator upgrade objective.
+
+`data/canonical/v0/world_regions.json` is the first Mini Earth workbench output. It is generated from a Natural Earth-style 1:110m countries GeoJSON with `tools/python/prepare_world_geometry.py` and is inspectable with `economy_inspect world-map`; it is not connected to the island economy yet.

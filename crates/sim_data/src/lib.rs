@@ -128,6 +128,22 @@ pub struct RegionProfile {
     pub authored_status: AuthoredStatus,
 }
 
+pub type WorldGeometry = Vec<Vec<Vec<[f64; 2]>>>;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldRegion {
+    pub id: String,
+    pub display_name: String,
+    pub iso_a3: String,
+    pub centroid_lon: f64,
+    pub centroid_lat: f64,
+    pub geometry: WorldGeometry,
+    pub tags: Vec<String>,
+    pub source_refs: Vec<SourceRef>,
+    pub confidence: Confidence,
+    pub authored_status: AuthoredStatus,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WinMetric {
@@ -197,6 +213,7 @@ pub struct CanonicalEconomy {
     pub recipes: Vec<ProcessRecipe>,
     pub facilities: Vec<FacilityArchetype>,
     pub regions: Vec<RegionProfile>,
+    pub world_regions: Vec<WorldRegion>,
     pub scenarios: Vec<Scenario>,
 }
 
@@ -213,6 +230,7 @@ pub struct ValidatedEconomy {
     pub facilities_by_id: BTreeMap<FacilityArchetypeId, FacilityArchetype>,
     pub recipes_by_id: BTreeMap<RecipeId, ProcessRecipe>,
     pub scenarios_by_id: BTreeMap<String, Scenario>,
+    pub world_regions_by_id: BTreeMap<String, WorldRegion>,
     pub recipe_book: RecipeBook,
 }
 
@@ -250,6 +268,14 @@ pub enum ValidationError {
         commodity: CommodityId,
         abundance: f64,
     },
+    #[error("world region {region} has invalid centroid lon/lat {lon},{lat}")]
+    InvalidWorldRegionCentroid { region: String, lon: f64, lat: f64 },
+    #[error("world region {region} has invalid iso_a3 {iso_a3}")]
+    InvalidWorldRegionIsoA3 { region: String, iso_a3: String },
+    #[error("world region {region} must include at least one polygon ring")]
+    WorldRegionWithoutGeometry { region: String },
+    #[error("world region {region} has invalid coordinate lon/lat {lon},{lat}")]
+    InvalidWorldRegionCoordinate { region: String, lon: f64, lat: f64 },
     #[error("scenario {scenario} references unknown region {region}")]
     UnknownRegion { scenario: String, region: RegionId },
     #[error("scenario {scenario} references unknown facility {facility}")]
@@ -324,6 +350,7 @@ pub fn load_canonical_dir(path: impl AsRef<Path>) -> Result<ValidatedEconomy, Da
         recipes: load_json_file(path.join("recipes.json"))?,
         facilities: load_json_file(path.join("facilities.json"))?,
         regions: load_json_file(path.join("regions.json"))?,
+        world_regions: load_json_file(path.join("world_regions.json"))?,
         scenarios: load_json_file(path.join("scenarios.json"))?,
     };
     validate_canonical(economy).map_err(Into::into)
@@ -347,6 +374,10 @@ pub fn sample_copper_island() -> Result<ValidatedEconomy, DataLoadError> {
             "data/canonical/v0/regions.json",
             include_str!("../../../data/canonical/v0/regions.json"),
         )?,
+        world_regions: parse_json_str(
+            "data/canonical/v0/world_regions.json",
+            include_str!("../../../data/canonical/v0/world_regions.json"),
+        )?,
         scenarios: parse_json_str(
             "data/canonical/v0/scenarios.json",
             include_str!("../../../data/canonical/v0/scenarios.json"),
@@ -362,6 +393,7 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
     let recipes_by_id = collect_recipes(&economy.recipes);
     let facilities_by_id = collect_facilities(&economy.facilities, &mut errors);
     let region_ids = collect_regions(&economy.regions, &mut errors);
+    let world_regions_by_id = collect_world_regions(&economy.world_regions, &mut errors);
     let scenarios_by_id = collect_scenarios(&economy.scenarios, &mut errors);
 
     for commodity in &economy.commodities {
@@ -455,6 +487,31 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
                 });
             }
         }
+    }
+
+    for world_region in &economy.world_regions {
+        validate_common(
+            "world_region",
+            world_region.id.clone(),
+            &world_region.display_name,
+            &world_region.source_refs,
+            &world_region.authored_status,
+            &mut errors,
+        );
+        if !valid_iso_a3(&world_region.iso_a3) {
+            errors.push(ValidationError::InvalidWorldRegionIsoA3 {
+                region: world_region.id.clone(),
+                iso_a3: world_region.iso_a3.clone(),
+            });
+        }
+        if !valid_lon_lat(world_region.centroid_lon, world_region.centroid_lat) {
+            errors.push(ValidationError::InvalidWorldRegionCentroid {
+                region: world_region.id.clone(),
+                lon: world_region.centroid_lon,
+                lat: world_region.centroid_lat,
+            });
+        }
+        validate_world_geometry(world_region, &mut errors);
     }
 
     for scenario in &economy.scenarios {
@@ -551,6 +608,7 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
         facilities_by_id,
         recipes_by_id,
         scenarios_by_id,
+        world_regions_by_id,
         recipe_book,
     })
 }
@@ -674,6 +732,43 @@ fn validate_scenario_map(scenario: &Scenario, errors: &mut Vec<ValidationError>)
     }
 }
 
+fn validate_world_geometry(world_region: &WorldRegion, errors: &mut Vec<ValidationError>) {
+    let mut has_ring = false;
+    for polygon in &world_region.geometry {
+        for ring in polygon {
+            if !ring.is_empty() {
+                has_ring = true;
+            }
+            for [lon, lat] in ring {
+                if !valid_lon_lat(*lon, *lat) {
+                    errors.push(ValidationError::InvalidWorldRegionCoordinate {
+                        region: world_region.id.clone(),
+                        lon: *lon,
+                        lat: *lat,
+                    });
+                }
+            }
+        }
+    }
+
+    if !has_ring {
+        errors.push(ValidationError::WorldRegionWithoutGeometry {
+            region: world_region.id.clone(),
+        });
+    }
+}
+
+fn valid_lon_lat(lon: f64, lat: f64) -> bool {
+    (-180.0..=180.0).contains(&lon) && (-90.0..=90.0).contains(&lat)
+}
+
+fn valid_iso_a3(iso_a3: &str) -> bool {
+    iso_a3.len() == 3
+        && iso_a3
+            .chars()
+            .all(|character| character.is_ascii_uppercase())
+}
+
 fn collect_commodities(
     commodities: &[Commodity],
     errors: &mut Vec<ValidationError>,
@@ -749,6 +844,24 @@ fn collect_regions(
     seen
 }
 
+fn collect_world_regions(
+    world_regions: &[WorldRegion],
+    errors: &mut Vec<ValidationError>,
+) -> BTreeMap<String, WorldRegion> {
+    let mut seen = BTreeSet::new();
+    let mut map = BTreeMap::new();
+    for world_region in world_regions {
+        if !seen.insert(world_region.id.clone()) {
+            errors.push(ValidationError::DuplicateId {
+                entity: "world_region",
+                id: world_region.id.clone(),
+            });
+        }
+        map.insert(world_region.id.clone(), world_region.clone());
+    }
+    map
+}
+
 fn collect_scenarios(
     scenarios: &[Scenario],
     errors: &mut Vec<ValidationError>,
@@ -809,6 +922,7 @@ mod tests {
                 .scenarios_by_id
                 .contains_key("scenario.copper_island.power_loop")
         );
+        assert!(economy.world_regions_by_id.contains_key("world.usa"));
         assert!(
             economy
                 .scenarios_by_id
@@ -906,6 +1020,36 @@ mod tests {
                 .errors
                 .iter()
                 .any(|error| matches!(error, ValidationError::ScenarioMapUnknownTileKind { .. }))
+        );
+    }
+
+    #[test]
+    fn validator_rejects_bad_world_region_geometry() {
+        let mut economy = sample_copper_island().unwrap().canonical;
+        economy.world_regions[0].geometry[0][0][0] = [250.0, 0.0];
+
+        let report = validate_canonical(economy).unwrap_err();
+
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|error| matches!(error, ValidationError::InvalidWorldRegionCoordinate { .. }))
+        );
+    }
+
+    #[test]
+    fn validator_rejects_bad_world_region_iso_code() {
+        let mut economy = sample_copper_island().unwrap().canonical;
+        economy.world_regions[0].iso_a3 = "bad".to_string();
+
+        let report = validate_canonical(economy).unwrap_err();
+
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|error| matches!(error, ValidationError::InvalidWorldRegionIsoA3 { .. }))
         );
     }
 }

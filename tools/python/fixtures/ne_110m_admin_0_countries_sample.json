@@ -1,0 +1,66 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "NAME": "Exampleland",
+        "NAME_LONG": "Exampleland",
+        "ADMIN": "Exampleland",
+        "ISO_A3": "EXA",
+        "CONTINENT": "Test Continent",
+        "REGION_UN": "Test Region",
+        "SUBREGION": "Test Subregion",
+        "REGION_WB": "Test Bank Region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-10.0, 0.0],
+            [-8.0, 0.0],
+            [-8.0, 2.0],
+            [-10.0, 2.0],
+            [-10.0, 0.0]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "NAME": "Sample Islands",
+        "NAME_LONG": "Sample Islands",
+        "ADMIN": "Sample Islands",
+        "ISO_A3": "SMP",
+        "CONTINENT": "Test Continent",
+        "REGION_UN": "Test Region",
+        "SUBREGION": "Island Tests",
+        "REGION_WB": "Test Bank Region"
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [20.0, 10.0],
+              [21.0, 10.0],
+              [21.0, 11.0],
+              [20.0, 11.0],
+              [20.0, 10.0]
+            ]
+          ],
+          [
+            [
+              [23.0, 9.0],
+              [24.0, 9.0],
+              [24.0, 10.0],
+              [23.0, 10.0],
+              [23.0, 9.0]
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

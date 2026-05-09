@@ -9,6 +9,7 @@ data/canonical/v0/commodities.json
 data/canonical/v0/recipes.json
 data/canonical/v0/facilities.json
 data/canonical/v0/regions.json
+data/canonical/v0/world_regions.json
 data/canonical/v0/scenarios.json
 ```
 
@@ -51,6 +52,26 @@ Scenarios keep tutorial/gameplay setup out of Bevy client code:
 
 This is still intentionally simple. The first goal is not a general campaign system; it is a small data seam that lets future scenarios grow without recompiling client logic for every build option.
 
+## World Geometry
+
+`world_regions.json` is the static Mini Earth geometry workbench. It is intentionally separate from `regions.json`: a world region is a drawable country/admin shape, while a gameplay region is a simulation profile.
+
+Each world region includes:
+
+- `id`: stable region id such as `world.usa`.
+- `display_name` and `iso_a3`.
+- `centroid_lon` and `centroid_lat`.
+- `geometry`: simplified MultiPolygon rings as lon/lat pairs.
+- shared metadata: `tags`, `source_refs`, `confidence`, and `authored_status`.
+
+Regenerate it from a manually downloaded Natural Earth-style GeoJSON file with:
+
+```bash
+python tools/python/prepare_world_geometry.py \
+  --input ../natural-earth-geojson/110m/cultural/ne_110m_admin_0_countries.json \
+  --output data/canonical/v0/world_regions.json
+```
+
 ## Extension Direction
 
 Prefer adding optional fields or new versioned files over changing existing meanings. The expected future path is:
@@ -72,6 +93,7 @@ cargo run -p sim_data --bin economy_inspect -- scenario
 cargo run -p sim_data --bin economy_inspect -- list-scenarios
 cargo run -p sim_data --bin economy_inspect -- map scenario.copper_island.logistics_squeeze
 cargo run -p sim_data --bin economy_inspect -- scenario scenario.copper_island.steel_gate
+cargo run -p sim_data --bin economy_inspect -- world-map
 cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
 ```
