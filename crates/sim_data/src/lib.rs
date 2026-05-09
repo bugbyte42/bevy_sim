@@ -176,6 +176,10 @@ pub struct ScenarioMapLayout {
 pub struct Scenario {
     pub id: String,
     pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub objective_notes: Vec<String>,
     pub region: RegionId,
     pub map_layout: ScenarioMapLayout,
     pub starting_inventory: Vec<Quantity>,
@@ -804,6 +808,39 @@ mod tests {
             economy
                 .scenarios_by_id
                 .contains_key("scenario.copper_island.power_loop")
+        );
+        assert!(
+            economy
+                .scenarios_by_id
+                .contains_key("scenario.copper_island.steel_gate")
+        );
+        assert!(
+            economy
+                .recipes_by_id
+                .contains_key(&RecipeId::from("recipe.generator_upgrade.v1"))
+        );
+    }
+
+    #[test]
+    fn scenario_metadata_loads_for_player_guidance() {
+        let economy = sample_copper_island().unwrap();
+        let scenario = economy
+            .scenarios_by_id
+            .get("scenario.copper_island.steel_gate")
+            .expect("sample data includes steel gate scenario");
+
+        assert!(
+            scenario
+                .description
+                .as_deref()
+                .unwrap_or("")
+                .contains("steel")
+        );
+        assert!(
+            scenario
+                .objective_notes
+                .iter()
+                .any(|note| note.contains("machine parts"))
         );
     }
 

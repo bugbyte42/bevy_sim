@@ -404,6 +404,9 @@ fn run_overview(economy: &EconomyState, clock: Option<&EconomyClock>, selected: 
 fn objective_panel(economy: &EconomyState) -> String {
     let mut output = String::new();
     output.push_str("\nObjectives\n");
+    for (index, note) in economy.scenario.objective_notes.iter().enumerate() {
+        output.push_str(&format!("{}. {note}\n", index + 1));
+    }
     for (commodity, current, target) in win_condition_progress(economy) {
         output.push_str(&format!(
             "- {}: {current:.1}/{target:.1}\n",
@@ -460,8 +463,32 @@ fn next_step_text(economy: &EconomyState, map: &IslandMap) -> String {
             "recipe.draw_copper_wire.v1",
             "Build a wire workshop at the settlement to finish the copper wire chain.",
         ),
+        (
+            "recipe.mine_iron_ore.v1",
+            "Build an iron mine when the steel chain is part of this scenario.",
+        ),
+        (
+            "recipe.quarry_limestone.v1",
+            "Build a limestone quarry so the iron furnace has flux.",
+        ),
+        (
+            "recipe.smelt_iron.v1",
+            "Build an iron furnace at the settlement to turn ore into iron.",
+        ),
+        (
+            "recipe.make_steel.v1",
+            "Build a steel furnace at the settlement to make construction-grade steel.",
+        ),
+        (
+            "recipe.machine_parts.v1",
+            "Build a machine shop at the settlement to assemble machine parts.",
+        ),
+        (
+            "recipe.generator_upgrade.v1",
+            "Build an upgrade bench at the settlement to combine wire, steel, and machine parts.",
+        ),
     ] {
-        if !has_active_recipe(economy, recipe) {
+        if scenario_uses_recipe(economy, recipe) && !has_active_recipe(economy, recipe) {
             return guidance.to_string();
         }
     }
@@ -484,6 +511,16 @@ fn has_active_recipe(economy: &EconomyState, recipe: &str) -> bool {
     })
 }
 
+fn scenario_uses_recipe(economy: &EconomyState, recipe: &str) -> bool {
+    economy.scenario.build_options.iter().any(|option| {
+        option
+            .active_recipe
+            .as_ref()
+            .map(|recipe_id| recipe_id.as_str() == recipe)
+            .unwrap_or(false)
+    })
+}
+
 fn settlement_stock_panel(economy: &EconomyState) -> String {
     let mut output = String::new();
     output.push_str("\nSettlement Stock\n");
@@ -492,10 +529,16 @@ fn settlement_stock_panel(economy: &EconomyState) -> String {
             "resource.wood",
             "resource.coal",
             "ore.copper",
+            "ore.iron",
+            "mineral.limestone",
             "energy.heat",
             "energy.electricity",
             "metal.copper",
+            "metal.iron",
+            "metal.steel",
             "component.copper_wire",
+            "component.machine_parts",
+            "upgrade.generator",
         ] {
             let commodity = CommodityId::from(commodity);
             let qty = inventory.get(&commodity);

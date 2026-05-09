@@ -2,6 +2,12 @@
   {
     "id": "scenario.copper_island.power_loop",
     "display_name": "Copper Island Power Loop",
+    "description": "A small starter island for learning the coal, heat, electricity, copper, and wire loop.",
+    "objective_notes": [
+      "Start wood, coal, heat, and generator production.",
+      "Mine copper ore, smelt copper, and draw wire.",
+      "Use routes to keep settlement facilities supplied."
+    ],
     "region": "region.copper_island",
     "map_layout": {
       "kind_rows": [
@@ -156,6 +162,12 @@
   {
     "id": "scenario.copper_island.logistics_squeeze",
     "display_name": "Copper Island Logistics Squeeze",
+    "description": "A wider island where distant deposits make route capacity the main bottleneck.",
+    "objective_notes": [
+      "Build remote mines and watch route throughput.",
+      "Increase route capacity when settlement recipes starve.",
+      "Finish a smaller electricity and copper wire target under transport pressure."
+    ],
     "region": "region.copper_island",
     "map_layout": {
       "kind_rows": [
@@ -341,7 +353,7 @@
         "facility_node": "settlement"
       },
       {
-        "key": "Digit7",
+        "key": "Click",
         "label": "warehouse",
         "facility_archetype": "facility.warehouse.tier1",
         "active_recipe": null,
@@ -353,6 +365,255 @@
     "tags": ["tutorial", "phase1", "logistics", "constraint"],
     "source_refs": [],
     "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "scenario.copper_island.steel_gate",
+    "display_name": "Copper Island Steel Gate",
+    "description": "An advanced sandbox that adds iron, limestone, steel, machine parts, and a generator upgrade goal.",
+    "objective_notes": [
+      "Stabilize the power loop before expanding the factory chain.",
+      "Mine iron and limestone, then smelt iron and make steel.",
+      "Use steel, electricity, and copper wire to assemble machine parts and a generator upgrade."
+    ],
+    "region": "region.copper_island",
+    "map_layout": {
+      "kind_rows": [
+        [
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water"
+        ],
+        [
+          "water",
+          "forest",
+          "coal",
+          "buildable",
+          "limestone",
+          "buildable",
+          "iron",
+          "forest",
+          "water"
+        ],
+        [
+          "water",
+          "buildable",
+          "buildable",
+          "copper",
+          "buildable",
+          "buildable",
+          "limestone",
+          "buildable",
+          "water"
+        ],
+        [
+          "water",
+          "coal",
+          "buildable",
+          "settlement",
+          "buildable",
+          "copper",
+          "buildable",
+          "iron",
+          "water"
+        ],
+        [
+          "water",
+          "forest",
+          "buildable",
+          "coal",
+          "buildable",
+          "limestone",
+          "buildable",
+          "forest",
+          "water"
+        ],
+        [
+          "water",
+          "buildable",
+          "iron",
+          "buildable",
+          "copper",
+          "buildable",
+          "buildable",
+          "buildable",
+          "water"
+        ],
+        [
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water"
+        ]
+      ],
+      "initial_selected": { "col": 3, "row": 3 }
+    },
+    "starting_inventory": [
+      { "commodity": "resource.wood", "qty": 140.0 },
+      { "commodity": "resource.water", "qty": 180.0 },
+      { "commodity": "resource.coal", "qty": 18.0 },
+      { "commodity": "food.basic", "qty": 40.0 },
+      { "commodity": "labor.basic", "qty": 28.0 }
+    ],
+    "win_conditions": [
+      {
+        "commodity": "energy.electricity",
+        "qty": 120.0,
+        "metric": "produced_total"
+      },
+      {
+        "commodity": "component.copper_wire",
+        "qty": 20.0,
+        "metric": "produced_total"
+      },
+      {
+        "commodity": "upgrade.generator",
+        "qty": 1.0,
+        "metric": "produced_total"
+      }
+    ],
+    "build_options": [
+      {
+        "key": "Digit1",
+        "label": "camp",
+        "facility_archetype": "facility.camp.tier1",
+        "active_recipe": "recipe.gather_wood.v1",
+        "allowed_tile_kinds": ["forest"],
+        "transport_output": "resource.wood",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "coal mine",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_coal.v1",
+        "allowed_tile_kinds": ["coal"],
+        "transport_output": "resource.coal",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "copper mine",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_copper_ore.v1",
+        "allowed_tile_kinds": ["copper"],
+        "transport_output": "ore.copper",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "iron mine",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_iron_ore.v1",
+        "allowed_tile_kinds": ["iron"],
+        "transport_output": "ore.iron",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit2",
+        "label": "limestone quarry",
+        "facility_archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.quarry_limestone.v1",
+        "allowed_tile_kinds": ["limestone"],
+        "transport_output": "mineral.limestone",
+        "facility_node": "tile"
+      },
+      {
+        "key": "Digit3",
+        "label": "heat furnace",
+        "facility_archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.burn_coal_for_heat.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit4",
+        "label": "copper furnace",
+        "facility_archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.smelt_copper.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit5",
+        "label": "generator",
+        "facility_archetype": "facility.generator.tier1",
+        "active_recipe": "recipe.generate_electricity_from_heat.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit6",
+        "label": "wire workshop",
+        "facility_archetype": "facility.workshop.tier1",
+        "active_recipe": "recipe.draw_copper_wire.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit7",
+        "label": "iron furnace",
+        "facility_archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.smelt_iron.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit8",
+        "label": "steel furnace",
+        "facility_archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.make_steel.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit9",
+        "label": "machine shop",
+        "facility_archetype": "facility.workshop.tier1",
+        "active_recipe": "recipe.machine_parts.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit0",
+        "label": "upgrade bench",
+        "facility_archetype": "facility.workshop.tier1",
+        "active_recipe": "recipe.generator_upgrade.v1",
+        "allowed_tile_kinds": ["settlement"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      },
+      {
+        "key": "Digit7",
+        "label": "warehouse",
+        "facility_archetype": "facility.warehouse.tier1",
+        "active_recipe": null,
+        "allowed_tile_kinds": ["settlement", "buildable"],
+        "transport_output": null,
+        "facility_node": "settlement"
+      }
+    ],
+    "tags": ["tutorial", "phase2", "steel", "machine_chain"],
+    "source_refs": [],
+    "confidence": "low",
     "authored_status": "hand_authored"
   }
 ]

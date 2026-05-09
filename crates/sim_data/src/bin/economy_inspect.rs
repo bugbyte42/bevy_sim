@@ -54,6 +54,9 @@ fn list_scenarios(economy: &ValidatedEconomy) -> String {
     writeln!(output, "Scenarios").unwrap();
     for scenario in &economy.canonical.scenarios {
         writeln!(output, "- {}: {}", scenario.id, scenario.display_name).unwrap();
+        if let Some(description) = &scenario.description {
+            writeln!(output, "  {description}").unwrap();
+        }
     }
     output
 }
@@ -84,6 +87,9 @@ fn describe_scenario(economy: &ValidatedEconomy, scenario: &Scenario) -> String 
     let mut output = String::new();
     writeln!(output, "Scenario: {}", scenario.display_name).unwrap();
     writeln!(output, "id: {}", scenario.id).unwrap();
+    if let Some(description) = &scenario.description {
+        writeln!(output, "description: {description}").unwrap();
+    }
     writeln!(output, "region: {}", scenario.region).unwrap();
     let map_width = scenario
         .map_layout
@@ -100,6 +106,13 @@ fn describe_scenario(economy: &ValidatedEconomy, scenario: &Scenario) -> String 
         scenario.map_layout.initial_selected.row
     )
     .unwrap();
+
+    if !scenario.objective_notes.is_empty() {
+        writeln!(output, "\nObjective Notes").unwrap();
+        for (index, note) in scenario.objective_notes.iter().enumerate() {
+            writeln!(output, "{}. {note}", index + 1).unwrap();
+        }
+    }
 
     writeln!(output, "\nStarting Inventory").unwrap();
     for quantity in &scenario.starting_inventory {
@@ -453,6 +466,7 @@ mod tests {
 
         assert!(output.contains("scenario.copper_island.power_loop"));
         assert!(output.contains("scenario.copper_island.logistics_squeeze"));
+        assert!(output.contains("scenario.copper_island.steel_gate"));
     }
 
     #[test]
@@ -474,8 +488,23 @@ mod tests {
         let output = run(vec!["scenario".to_string()]).unwrap();
 
         assert!(output.contains("Scenario: Copper Island Power Loop"));
+        assert!(output.contains("Objective Notes"));
         assert!(output.contains("Build Options"));
         assert!(output.contains("Digit6: wire workshop"));
+    }
+
+    #[test]
+    fn steel_gate_scenario_output_mentions_objectives() {
+        let output = run(vec![
+            "scenario".to_string(),
+            "scenario.copper_island.steel_gate".to_string(),
+        ])
+        .unwrap();
+
+        assert!(output.contains("Scenario: Copper Island Steel Gate"));
+        assert!(output.contains("description:"));
+        assert!(output.contains("machine parts"));
+        assert!(output.contains("Digit0: upgrade bench"));
     }
 
     #[test]

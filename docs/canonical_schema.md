@@ -43,6 +43,8 @@ The validator rejects:
 Scenarios keep tutorial/gameplay setup out of Bevy client code:
 
 - `map_layout`: a compact row-based tile layout plus initial selected tile.
+- `description`: optional player-facing summary for scenario pickers and inspectors.
+- `objective_notes`: optional ordered player-facing hints; `win_conditions` remain the actual completion source of truth.
 - `starting_inventory`: what the settlement begins with.
 - `win_conditions`: target commodities and whether progress is measured by produced totals or current inventory.
 - `build_options`: key binding, label, facility archetype, active recipe, allowed tile kinds, optional transported output, and whether the facility lives on the selected tile node or settlement node.
@@ -69,6 +71,7 @@ Use the headless inspector when changing canonical data:
 cargo run -p sim_data --bin economy_inspect -- scenario
 cargo run -p sim_data --bin economy_inspect -- list-scenarios
 cargo run -p sim_data --bin economy_inspect -- map scenario.copper_island.logistics_squeeze
+cargo run -p sim_data --bin economy_inspect -- scenario scenario.copper_island.steel_gate
 cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
 ```
