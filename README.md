@@ -59,6 +59,8 @@ The client starts with settlement inventory and an island containing forest, coa
 - `6`: wire workshop on settlement
 - `7`: warehouse on settlement or buildable ground
 - `Tab`: cycle recipe graph commodity
+- `R`: cycle selected logistics route
+- `=` / `-`: increase or decrease selected route capacity
 
 Resource extraction facilities output to their tile node. A low-capacity route moves goods back to the settlement, which makes transport bottlenecks visible before individual vehicles exist.
 

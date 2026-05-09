@@ -7,6 +7,7 @@ use sim_data::{BuildOption, FacilityArchetype, Quantity, ValidatedEconomy};
 
 use crate::plugins::{
     economy::{EconomyState, settlement_inventory, win_condition_progress},
+    logistics::{RouteSelection, selected_route_id},
     map::{IslandMap, TileKind},
     recipe_graph::RecipeGraphSelection,
 };
@@ -78,6 +79,7 @@ fn update_debug_ui(
     economy: Option<Res<EconomyState>>,
     map: Res<IslandMap>,
     graph_selection: Res<RecipeGraphSelection>,
+    route_selection: Res<RouteSelection>,
     mut inventory_text: Query<&mut Text, (With<InventoryText>, Without<GraphText>)>,
     mut graph_text: Query<&mut Text, (With<GraphText>, Without<InventoryText>)>,
 ) {
@@ -87,7 +89,7 @@ fn update_debug_ui(
 
     if let Ok(mut text) = inventory_text.single_mut() {
         text.clear();
-        text.push_str(&inventory_panel(&economy, &map));
+        text.push_str(&inventory_panel(&economy, &map, &route_selection));
     }
     if let Ok(mut text) = graph_text.single_mut() {
         text.clear();
@@ -95,7 +97,11 @@ fn update_debug_ui(
     }
 }
 
-fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
+fn inventory_panel(
+    economy: &EconomyState,
+    map: &IslandMap,
+    route_selection: &RouteSelection,
+) -> String {
     let selected = map
         .selected
         .and_then(|id| map.tile(id))
@@ -123,6 +129,7 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
         output.push_str("state: win condition reached\n");
     }
     output.push_str(&ledger_panel(economy));
+    output.push_str(&route_panel(economy, route_selection));
     output.push_str(&selected_tile_panel(economy, map));
 
     output.push_str("\nSettlement inventory\n");
@@ -151,6 +158,66 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
     for event in economy.last_report.iter().rev().take(5) {
         output.push_str(&format_event(economy, event));
         output.push('\n');
+    }
+
+    output
+}
+
+fn route_panel(economy: &EconomyState, selection: &RouteSelection) -> String {
+    let mut output = String::new();
+    output.push_str("\nSelected route\n");
+    let Some(edge_id) = selected_route_id(economy, Some(selection)) else {
+        output.push_str("- none\n");
+        return output;
+    };
+    let Some(edge) = economy.world.edges.get(&edge_id) else {
+        output.push_str("- missing route\n");
+        return output;
+    };
+    output.push_str(&format!("{}: {} -> {}\n", edge.id, edge.from, edge.to));
+    output.push_str(&format!(
+        "capacity: {:.1}/tick | cost {:.1}\n",
+        edge.capacity_per_tick, edge.distance_cost
+    ));
+    output.push_str("controls: R route, = more, - less\n");
+
+    let mut movement_count = 0;
+    for event in &economy.last_report {
+        match event {
+            TickEvent::TransportMoved {
+                edge: moved_edge,
+                commodity,
+                qty,
+                capacity_limited,
+                ..
+            } if moved_edge == &edge.id => {
+                movement_count += 1;
+                let suffix = if *capacity_limited {
+                    " capacity limited"
+                } else {
+                    ""
+                };
+                output.push_str(&format!(
+                    "- moved {:.1} {}{}\n",
+                    qty,
+                    display_commodity(&economy.data, commodity),
+                    suffix
+                ));
+            }
+            TickEvent::TransportBlocked { order, reason } => {
+                let Some(order) = economy.world.transport_orders.get(order) else {
+                    continue;
+                };
+                if order.edge_id == edge.id {
+                    movement_count += 1;
+                    output.push_str(&format!("- blocked: {}\n", format_transport_block(reason)));
+                }
+            }
+            _ => {}
+        }
+    }
+    if movement_count == 0 {
+        output.push_str("- no route activity last tick\n");
     }
 
     output
@@ -574,6 +641,20 @@ fn format_event(economy: &EconomyState, event: &TickEvent) -> String {
                 )
             }
         },
+    }
+}
+
+fn format_transport_block(reason: &TransportBlockReason) -> String {
+    match reason {
+        TransportBlockReason::DisabledEdge => "disabled".to_string(),
+        TransportBlockReason::MissingEdge(edge) => format!("missing edge {edge}"),
+        TransportBlockReason::MissingNode(node) => format!("missing node {node}"),
+        TransportBlockReason::CommodityNotAllowed(commodity) => {
+            format!("commodity not allowed: {commodity}")
+        }
+        TransportBlockReason::DestinationAtTarget => "destination stocked".to_string(),
+        TransportBlockReason::NoSourceInventory => "no source inventory".to_string(),
+        TransportBlockReason::ZeroCapacity => "zero capacity".to_string(),
     }
 }
 
