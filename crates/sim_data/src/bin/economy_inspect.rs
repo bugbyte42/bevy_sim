@@ -2,7 +2,7 @@ use sim_core::{CommodityId, Inventory, RecipeId, Stack};
 use sim_data::{
     DataLoadError, Scenario, ValidatedEconomy, load_canonical_dir, sample_copper_island,
 };
-use std::{env, fmt::Write, process::ExitCode};
+use std::{collections::BTreeMap, env, fmt::Write, process::ExitCode};
 
 const DEFAULT_DATA_DIR: &str = "data/canonical/v0";
 const DEFAULT_SCENARIO: &str = "scenario.copper_island.power_loop";
@@ -29,6 +29,10 @@ fn run(args: Vec<String>) -> Result<String, String> {
         Command::Scenario { scenario_id } => {
             let scenario = scenario(&economy, scenario_id.as_deref())?;
             Ok(describe_scenario(&economy, scenario))
+        }
+        Command::Map { scenario_id } => {
+            let scenario = scenario(&economy, scenario_id.as_deref())?;
+            Ok(describe_map(scenario))
         }
         Command::Commodity { commodity_id } => Ok(describe_commodity(
             &economy,
@@ -147,6 +151,90 @@ fn describe_scenario(economy: &ValidatedEconomy, scenario: &Scenario) -> String 
     output
 }
 
+fn describe_map(scenario: &Scenario) -> String {
+    let mut output = String::new();
+    let map_width = scenario
+        .map_layout
+        .kind_rows
+        .first()
+        .map(Vec::len)
+        .unwrap_or_default();
+    writeln!(output, "Map: {}", scenario.display_name).unwrap();
+    writeln!(
+        output,
+        "size: {}x{} tiles",
+        map_width,
+        scenario.map_layout.kind_rows.len()
+    )
+    .unwrap();
+    let selected_kind = scenario
+        .map_layout
+        .kind_rows
+        .get(scenario.map_layout.initial_selected.row)
+        .and_then(|row| row.get(scenario.map_layout.initial_selected.col))
+        .map(String::as_str)
+        .unwrap_or("unknown");
+    writeln!(
+        output,
+        "initial selection: {},{} ({selected_kind})",
+        scenario.map_layout.initial_selected.col, scenario.map_layout.initial_selected.row
+    )
+    .unwrap();
+
+    writeln!(output, "\nPreview").unwrap();
+    for (row_index, row) in scenario.map_layout.kind_rows.iter().enumerate() {
+        for (col_index, tile_kind) in row.iter().enumerate() {
+            if col_index > 0 {
+                output.push(' ');
+            }
+            let selected = scenario.map_layout.initial_selected.col == col_index
+                && scenario.map_layout.initial_selected.row == row_index;
+            output.push(if selected { '@' } else { tile_glyph(tile_kind) });
+        }
+        output.push('\n');
+    }
+
+    writeln!(output, "\nLegend").unwrap();
+    writeln!(output, "@ initial selected tile").unwrap();
+    for (glyph, label) in [
+        ('~', "water"),
+        ('F', "forest"),
+        ('K', "coal"),
+        ('C', "copper"),
+        ('I', "iron"),
+        ('L', "limestone"),
+        ('S', "settlement"),
+        ('.', "buildable"),
+    ] {
+        writeln!(output, "{glyph} {label}").unwrap();
+    }
+
+    writeln!(output, "\nTile Counts").unwrap();
+    let mut counts = BTreeMap::new();
+    for tile_kind in scenario.map_layout.kind_rows.iter().flatten() {
+        *counts.entry(tile_kind.as_str()).or_insert(0usize) += 1;
+    }
+    for (tile_kind, count) in counts {
+        writeln!(output, "- {tile_kind}: {count}").unwrap();
+    }
+
+    output
+}
+
+fn tile_glyph(tile_kind: &str) -> char {
+    match tile_kind {
+        "water" => '~',
+        "forest" => 'F',
+        "coal" => 'K',
+        "copper" => 'C',
+        "iron" => 'I',
+        "limestone" => 'L',
+        "settlement" => 'S',
+        "buildable" => '.',
+        _ => '?',
+    }
+}
+
 fn describe_commodity(economy: &ValidatedEconomy, commodity: &CommodityId) -> String {
     let mut output = String::new();
     let links = economy.recipe_book.links_for(commodity);
@@ -249,6 +337,9 @@ enum Command {
     Scenario {
         scenario_id: Option<String>,
     },
+    Map {
+        scenario_id: Option<String>,
+    },
     Commodity {
         commodity_id: String,
     },
@@ -282,6 +373,9 @@ impl Args {
             Some("scenario") => Command::Scenario {
                 scenario_id: rest.get(1).cloned(),
             },
+            Some("map") => Command::Map {
+                scenario_id: rest.get(1).cloned(),
+            },
             Some("commodity") => Command::Commodity {
                 commodity_id: rest
                     .get(1)
@@ -307,6 +401,7 @@ fn usage() -> String {
         "Usage:",
         "  cargo run -p sim_data --bin economy_inspect -- list-scenarios",
         "  cargo run -p sim_data --bin economy_inspect -- scenario [scenario_id]",
+        "  cargo run -p sim_data --bin economy_inspect -- map [scenario_id]",
         "  cargo run -p sim_data --bin economy_inspect -- commodity <commodity_id>",
         "  cargo run -p sim_data --bin economy_inspect -- recipe <recipe_id> [scenario_id]",
         "",
@@ -358,6 +453,20 @@ mod tests {
 
         assert!(output.contains("scenario.copper_island.power_loop"));
         assert!(output.contains("scenario.copper_island.logistics_squeeze"));
+    }
+
+    #[test]
+    fn map_output_mentions_preview_and_counts() {
+        let output = run(vec![
+            "map".to_string(),
+            "scenario.copper_island.logistics_squeeze".to_string(),
+        ])
+        .unwrap();
+
+        assert!(output.contains("Map: Copper Island Logistics Squeeze"));
+        assert!(output.contains("Preview"));
+        assert!(output.contains("@ initial selected tile"));
+        assert!(output.contains("- settlement: 1"));
     }
 
     #[test]

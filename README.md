@@ -38,6 +38,7 @@ You can inspect the canonical tutorial data without launching Bevy:
 ```bash
 cargo run -p sim_data --bin economy_inspect -- scenario
 cargo run -p sim_data --bin economy_inspect -- list-scenarios
+cargo run -p sim_data --bin economy_inspect -- map scenario.copper_island.logistics_squeeze
 cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
 ```
