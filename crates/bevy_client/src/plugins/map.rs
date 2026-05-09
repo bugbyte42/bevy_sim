@@ -22,7 +22,13 @@ pub enum TileKind {
 
 impl Display for TileKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+        f.write_str(self.as_key())
+    }
+}
+
+impl TileKind {
+    pub fn as_key(self) -> &'static str {
+        match self {
             TileKind::Water => "water",
             TileKind::Forest => "forest",
             TileKind::Coal => "coal",
@@ -31,7 +37,7 @@ impl Display for TileKind {
             TileKind::Limestone => "limestone",
             TileKind::Settlement => "settlement",
             TileKind::Buildable => "buildable",
-        })
+        }
     }
 }
 

@@ -1,9 +1,12 @@
 use bevy::prelude::*;
-use sim_core::{BlockReason, CommodityId, RecipeId, TickEvent, TransportBlockReason};
+use sim_core::{
+    BlockReason, CommodityId, Inventory, RecipeId, Stack, TickEvent, TransportBlockReason,
+};
+use sim_data::{BuildOption, FacilityArchetype, Quantity, ValidatedEconomy};
 
 use crate::plugins::{
     economy::{EconomyState, settlement_inventory, win_condition_progress},
-    map::IslandMap,
+    map::{IslandMap, TileKind},
     recipe_graph::RecipeGraphSelection,
 };
 
@@ -118,6 +121,7 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
     if economy.win_achieved {
         output.push_str("state: win condition reached\n");
     }
+    output.push_str(&selected_tile_panel(economy, map));
 
     output.push_str("\nSettlement inventory\n");
     if let Some(inventory) = settlement_inventory(economy) {
@@ -148,6 +152,128 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
     }
 
     output
+}
+
+fn selected_tile_panel(economy: &EconomyState, map: &IslandMap) -> String {
+    let Some(tile) = map.selected.and_then(|id| map.tile(id)) else {
+        return String::new();
+    };
+
+    let mut output = String::new();
+    output.push_str("\nSelected tile\n");
+    if tile.facilities.is_empty() {
+        output.push_str("facilities: none\n");
+    } else {
+        output.push_str("facilities\n");
+        for facility_id in &tile.facilities {
+            let display = economy
+                .world
+                .facilities
+                .get(facility_id)
+                .and_then(|facility| economy.data.facilities_by_id.get(&facility.archetype_id))
+                .map(|archetype| archetype.display_name.as_str())
+                .unwrap_or(facility_id.as_str());
+            output.push_str(&format!("- {display}\n"));
+        }
+    }
+
+    output.push_str("build options\n");
+    let options: Vec<_> = economy
+        .scenario
+        .build_options
+        .iter()
+        .filter(|option| option_allowed_on(option, tile.kind))
+        .collect();
+    if options.is_empty() {
+        output.push_str("- none\n");
+        return output;
+    }
+
+    let settlement = settlement_inventory(economy);
+    for option in options {
+        let Some(archetype) = economy
+            .data
+            .facilities_by_id
+            .get(&option.facility_archetype)
+        else {
+            output.push_str(&format!("- {}: missing archetype\n", option.label));
+            continue;
+        };
+        let cost = cost_text(&economy.data, archetype);
+        let status = build_status(&economy.data, settlement, &archetype.build_cost);
+        let recipe = option
+            .active_recipe
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "storage".to_string());
+        output.push_str(&format!(
+            "- {}: {status}; cost {}; recipe {recipe}\n",
+            option.label, cost
+        ));
+    }
+
+    output
+}
+
+fn option_allowed_on(option: &BuildOption, kind: TileKind) -> bool {
+    option
+        .allowed_tile_kinds
+        .iter()
+        .any(|allowed| allowed == kind.as_key())
+}
+
+fn build_status(
+    economy: &ValidatedEconomy,
+    inventory: Option<&Inventory>,
+    cost: &[Quantity],
+) -> String {
+    let Some(inventory) = inventory else {
+        return "blocked: no settlement inventory".to_string();
+    };
+
+    let missing: Vec<_> = cost
+        .iter()
+        .filter_map(|quantity| {
+            let available = inventory.get(&quantity.commodity);
+            (available < quantity.qty)
+                .then(|| Stack::new(quantity.commodity.clone(), quantity.qty - available))
+        })
+        .collect();
+
+    if missing.is_empty() {
+        "ready".to_string()
+    } else {
+        format!(
+            "blocked: missing {}",
+            missing
+                .iter()
+                .map(|stack| format!(
+                    "{} {:.1}",
+                    display_commodity(economy, &stack.commodity),
+                    stack.qty
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+fn cost_text(economy: &ValidatedEconomy, archetype: &FacilityArchetype) -> String {
+    if archetype.build_cost.is_empty() {
+        return "none".to_string();
+    }
+    archetype
+        .build_cost
+        .iter()
+        .map(|quantity| {
+            format!(
+                "{} {:.1}",
+                display_commodity(economy, &quantity.commodity),
+                quantity.qty
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn graph_panel(economy: &EconomyState, selection: &RecipeGraphSelection) -> String {
@@ -185,6 +311,14 @@ fn graph_panel(economy: &EconomyState, selection: &RecipeGraphSelection) -> Stri
     }
 
     output
+}
+
+fn display_commodity(economy: &ValidatedEconomy, commodity: &CommodityId) -> String {
+    economy
+        .commodities_by_id
+        .get(commodity)
+        .map(|commodity_data| commodity_data.display_name.clone())
+        .unwrap_or_else(|| commodity.to_string())
 }
 
 fn append_recipe_ids(output: &mut String, recipes: &[RecipeId]) {

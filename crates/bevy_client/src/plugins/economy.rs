@@ -324,20 +324,7 @@ fn build_option_allowed_on(build_option: &BuildOption, kind: TileKind) -> bool {
     build_option
         .allowed_tile_kinds
         .iter()
-        .any(|allowed| allowed == tile_kind_key(kind))
-}
-
-fn tile_kind_key(kind: TileKind) -> &'static str {
-    match kind {
-        TileKind::Water => "water",
-        TileKind::Forest => "forest",
-        TileKind::Coal => "coal",
-        TileKind::Copper => "copper",
-        TileKind::Iron => "iron",
-        TileKind::Limestone => "limestone",
-        TileKind::Settlement => "settlement",
-        TileKind::Buildable => "buildable",
-    }
+        .any(|allowed| allowed == kind.as_key())
 }
 
 fn facility_node(build_option: &BuildOption, tile: &Tile) -> TransportNodeId {

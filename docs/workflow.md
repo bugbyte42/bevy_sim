@@ -31,6 +31,8 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 cargo check --workspace
 cargo run -p bevy_client
+cargo run -p sim_data --bin economy_inspect -- scenario
+cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 ```
 
 Long-running commands, dependency downloads, and git commits are intentionally left for the human lead to run and monitor.
