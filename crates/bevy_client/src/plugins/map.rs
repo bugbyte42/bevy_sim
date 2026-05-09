@@ -1,6 +1,9 @@
 use bevy::{camera_controller::pan_camera::PanCamera, prelude::*};
 use sim_core::{FacilityId, TransportNodeId};
+use sim_data::ScenarioMapLayout;
 use std::fmt::{self, Display};
+
+use crate::plugins::economy::EconomySetup;
 
 pub const TILE_SIZE: f32 = 56.0;
 pub const SETTLEMENT_NODE: &str = "node.settlement";
@@ -39,6 +42,20 @@ impl TileKind {
             TileKind::Buildable => "buildable",
         }
     }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "water" => Some(TileKind::Water),
+            "forest" => Some(TileKind::Forest),
+            "coal" => Some(TileKind::Coal),
+            "copper" => Some(TileKind::Copper),
+            "iron" => Some(TileKind::Iron),
+            "limestone" => Some(TileKind::Limestone),
+            "settlement" => Some(TileKind::Settlement),
+            "buildable" => Some(TileKind::Buildable),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -59,72 +76,27 @@ pub struct IslandMap {
 }
 
 impl IslandMap {
-    pub fn copper_island() -> Self {
-        let layout = [
-            [
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-            ],
-            [
-                TileKind::Water,
-                TileKind::Forest,
-                TileKind::Forest,
-                TileKind::Coal,
-                TileKind::Buildable,
-                TileKind::Limestone,
-                TileKind::Water,
-            ],
-            [
-                TileKind::Water,
-                TileKind::Copper,
-                TileKind::Buildable,
-                TileKind::Settlement,
-                TileKind::Buildable,
-                TileKind::Iron,
-                TileKind::Water,
-            ],
-            [
-                TileKind::Water,
-                TileKind::Forest,
-                TileKind::Coal,
-                TileKind::Buildable,
-                TileKind::Copper,
-                TileKind::Buildable,
-                TileKind::Water,
-            ],
-            [
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-                TileKind::Water,
-            ],
-        ];
-
+    pub fn from_scenario_layout(layout: &ScenarioMapLayout) -> Self {
+        let width = layout.kind_rows.first().map(Vec::len).unwrap_or_default() as f32;
+        let height = layout.kind_rows.len() as f32;
         let mut tiles = Vec::new();
-        for (row, kinds) in layout.iter().enumerate() {
+        for (row, kinds) in layout.kind_rows.iter().enumerate() {
             for (col, kind) in kinds.iter().enumerate() {
                 let id = TileId(tiles.len());
+                let kind = TileKind::from_key(kind).expect("scenario map is validated");
                 let grid = IVec2::new(col as i32, row as i32);
                 let world_pos = Vec2::new(
-                    (col as f32 - 3.0) * TILE_SIZE,
-                    (2.0 - row as f32) * TILE_SIZE,
+                    (col as f32 - (width - 1.0) * 0.5) * TILE_SIZE,
+                    ((height - 1.0) * 0.5 - row as f32) * TILE_SIZE,
                 );
-                let node_id = if *kind == TileKind::Settlement {
+                let node_id = if kind == TileKind::Settlement {
                     TransportNodeId::from(SETTLEMENT_NODE)
                 } else {
                     TransportNodeId::from(format!("node.tile.{}", id.0))
                 };
                 tiles.push(Tile {
                     id,
-                    kind: *kind,
+                    kind,
                     grid,
                     world_pos,
                     node_id,
@@ -135,7 +107,11 @@ impl IslandMap {
 
         Self {
             tiles,
-            selected: Some(TileId(17)),
+            selected: tile_id_at_grid(
+                &layout.kind_rows,
+                layout.initial_selected.col,
+                layout.initial_selected.row,
+            ),
             hovered: None,
         }
     }
@@ -185,8 +161,7 @@ pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(IslandMap::copper_island())
-            .add_systems(Startup, (spawn_camera, spawn_tiles).chain())
+        app.add_systems(Startup, (spawn_camera, spawn_tiles).chain())
             .add_systems(Update, (update_tile_colors, update_facility_marker_colors));
     }
 }
@@ -208,7 +183,8 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn((Camera2d, PanCamera::default(), GameCamera));
 }
 
-fn spawn_tiles(mut commands: Commands, map: Res<IslandMap>) {
+fn spawn_tiles(mut commands: Commands, setup: Res<EconomySetup>) {
+    let map = IslandMap::from_scenario_layout(&setup.scenario.map_layout);
     for tile in &map.tiles {
         let size = Vec2::splat(TILE_SIZE - 4.0);
         commands.spawn((
@@ -218,6 +194,7 @@ fn spawn_tiles(mut commands: Commands, map: Res<IslandMap>) {
             Name::new(format!("tile-{}-{}", tile.id.0, tile.kind)),
         ));
     }
+    commands.insert_resource(map);
 }
 
 fn update_tile_colors(map: Res<IslandMap>, mut tiles: Query<(&TileSprite, &mut Sprite)>) {
@@ -262,4 +239,10 @@ pub fn facility_marker_offset(index: usize) -> Vec2 {
         Vec2::ZERO,
     ];
     offsets[index % offsets.len()]
+}
+
+fn tile_id_at_grid(kind_rows: &[Vec<String>], col: usize, row: usize) -> Option<TileId> {
+    let width = kind_rows.first().map(Vec::len)?;
+    kind_rows.get(row)?.get(col)?;
+    Some(TileId(row * width + col))
 }

@@ -3,6 +3,40 @@
     "id": "scenario.copper_island.power_loop",
     "display_name": "Copper Island Power Loop",
     "region": "region.copper_island",
+    "map_layout": {
+      "kind_rows": [
+        ["water", "water", "water", "water", "water", "water", "water"],
+        [
+          "water",
+          "forest",
+          "forest",
+          "coal",
+          "buildable",
+          "limestone",
+          "water"
+        ],
+        [
+          "water",
+          "copper",
+          "buildable",
+          "settlement",
+          "buildable",
+          "iron",
+          "water"
+        ],
+        [
+          "water",
+          "forest",
+          "coal",
+          "buildable",
+          "copper",
+          "buildable",
+          "water"
+        ],
+        ["water", "water", "water", "water", "water", "water", "water"]
+      ],
+      "initial_selected": { "col": 3, "row": 2 }
+    },
     "starting_inventory": [
       { "commodity": "resource.wood", "qty": 90.0 },
       { "commodity": "resource.water", "qty": 120.0 },
@@ -123,6 +157,88 @@
     "id": "scenario.copper_island.logistics_squeeze",
     "display_name": "Copper Island Logistics Squeeze",
     "region": "region.copper_island",
+    "map_layout": {
+      "kind_rows": [
+        [
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water"
+        ],
+        [
+          "water",
+          "forest",
+          "buildable",
+          "coal",
+          "buildable",
+          "buildable",
+          "limestone",
+          "buildable",
+          "water"
+        ],
+        [
+          "water",
+          "buildable",
+          "buildable",
+          "buildable",
+          "water",
+          "buildable",
+          "buildable",
+          "iron",
+          "water"
+        ],
+        [
+          "water",
+          "copper",
+          "buildable",
+          "water",
+          "settlement",
+          "buildable",
+          "copper",
+          "buildable",
+          "water"
+        ],
+        [
+          "water",
+          "forest",
+          "buildable",
+          "coal",
+          "buildable",
+          "buildable",
+          "buildable",
+          "iron",
+          "water"
+        ],
+        [
+          "water",
+          "buildable",
+          "limestone",
+          "buildable",
+          "buildable",
+          "forest",
+          "buildable",
+          "buildable",
+          "water"
+        ],
+        [
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water",
+          "water"
+        ]
+      ],
+      "initial_selected": { "col": 4, "row": 3 }
+    },
     "starting_inventory": [
       { "commodity": "resource.wood", "qty": 60.0 },
       { "commodity": "resource.water", "qty": 80.0 },

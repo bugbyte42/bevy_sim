@@ -65,5 +65,5 @@ The client starts with settlement inventory and an island containing forest, coa
 
 Resource extraction facilities output to their tile node. A low-capacity route moves goods back to the settlement, which makes transport bottlenecks visible before individual vehicles exist.
 
-The starter inventory, win condition, and build options now live in `data/canonical/v0/scenarios.json`.
+The map layout, starter inventory, win condition, and build options now live in `data/canonical/v0/scenarios.json`.
 Set `BEVY_SIM_SCENARIO=scenario.copper_island.logistics_squeeze` before running the client to try the tighter logistics variant.

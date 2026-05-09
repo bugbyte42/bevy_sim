@@ -36,11 +36,13 @@ The validator rejects:
 - invalid facility recipe patterns,
 - invalid regional abundance values.
 - scenario references to unknown regions, facilities, recipes, commodities, or tile kinds.
+- malformed scenario map layouts, including ragged rows, unknown tile kinds, missing settlement tiles, or invalid initial selections.
 
 ## Scenario Data
 
 Scenarios keep tutorial/gameplay setup out of Bevy client code:
 
+- `map_layout`: a compact row-based tile layout plus initial selected tile.
 - `starting_inventory`: what the settlement begins with.
 - `win_conditions`: target commodities and whether progress is measured by produced totals or current inventory.
 - `build_options`: key binding, label, facility archetype, active recipe, allowed tile kinds, optional transported output, and whether the facility lives on the selected tile node or settlement node.

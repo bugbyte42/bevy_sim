@@ -160,11 +160,24 @@ pub struct BuildOption {
     pub facility_node: FacilityNodePolicy,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScenarioTileCoord {
+    pub col: usize,
+    pub row: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScenarioMapLayout {
+    pub kind_rows: Vec<Vec<String>>,
+    pub initial_selected: ScenarioTileCoord,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Scenario {
     pub id: String,
     pub display_name: String,
     pub region: RegionId,
+    pub map_layout: ScenarioMapLayout,
     pub starting_inventory: Vec<Quantity>,
     pub win_conditions: Vec<WinCondition>,
     pub build_options: Vec<BuildOption>,
@@ -249,6 +262,30 @@ pub enum ValidationError {
         scenario: String,
         label: String,
         tile_kind: String,
+    },
+    #[error("scenario {scenario} map must define at least one tile row")]
+    ScenarioMapWithoutTiles { scenario: String },
+    #[error("scenario {scenario} map row {row} has width {width}; expected {expected_width}")]
+    ScenarioMapRaggedRow {
+        scenario: String,
+        row: usize,
+        expected_width: usize,
+        width: usize,
+    },
+    #[error("scenario {scenario} map tile {col},{row} uses unknown tile kind {tile_kind}")]
+    ScenarioMapUnknownTileKind {
+        scenario: String,
+        col: usize,
+        row: usize,
+        tile_kind: String,
+    },
+    #[error("scenario {scenario} map must include at least one settlement tile")]
+    ScenarioMapMissingSettlement { scenario: String },
+    #[error("scenario {scenario} initial selection {col},{row} is outside playable map tiles")]
+    ScenarioMapInvalidInitialSelection {
+        scenario: String,
+        col: usize,
+        row: usize,
     },
     #[error("scenario {scenario} must define at least one win condition")]
     ScenarioWithoutWinCondition { scenario: String },
@@ -431,6 +468,7 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
                 region: scenario.region.clone(),
             });
         }
+        validate_scenario_map(scenario, &mut errors);
         validate_quantities(
             scenario.id.clone(),
             scenario.starting_inventory.iter(),
@@ -570,6 +608,65 @@ fn validate_quantities<'a>(
                 qty: quantity.qty,
             });
         }
+    }
+}
+
+fn validate_scenario_map(scenario: &Scenario, errors: &mut Vec<ValidationError>) {
+    let rows = &scenario.map_layout.kind_rows;
+    let Some(first_row) = rows.first() else {
+        errors.push(ValidationError::ScenarioMapWithoutTiles {
+            scenario: scenario.id.clone(),
+        });
+        return;
+    };
+    if first_row.is_empty() {
+        errors.push(ValidationError::ScenarioMapWithoutTiles {
+            scenario: scenario.id.clone(),
+        });
+        return;
+    }
+
+    let expected_width = first_row.len();
+    let mut has_settlement = false;
+    for (row_index, row) in rows.iter().enumerate() {
+        if row.len() != expected_width {
+            errors.push(ValidationError::ScenarioMapRaggedRow {
+                scenario: scenario.id.clone(),
+                row: row_index,
+                expected_width,
+                width: row.len(),
+            });
+        }
+        for (col_index, tile_kind) in row.iter().enumerate() {
+            if !is_known_tile_kind(tile_kind) {
+                errors.push(ValidationError::ScenarioMapUnknownTileKind {
+                    scenario: scenario.id.clone(),
+                    col: col_index,
+                    row: row_index,
+                    tile_kind: tile_kind.clone(),
+                });
+            }
+            has_settlement |= tile_kind == "settlement";
+        }
+    }
+
+    if !has_settlement {
+        errors.push(ValidationError::ScenarioMapMissingSettlement {
+            scenario: scenario.id.clone(),
+        });
+    }
+
+    let selected = &scenario.map_layout.initial_selected;
+    let selected_kind = rows
+        .get(selected.row)
+        .and_then(|row| row.get(selected.col))
+        .map(String::as_str);
+    if selected_kind.is_none() || selected_kind == Some("water") {
+        errors.push(ValidationError::ScenarioMapInvalidInitialSelection {
+            scenario: scenario.id.clone(),
+            col: selected.col,
+            row: selected.row,
+        });
     }
 }
 
@@ -757,6 +854,21 @@ mod tests {
                 .errors
                 .iter()
                 .any(|error| matches!(error, ValidationError::UnknownRecipe { .. }))
+        );
+    }
+
+    #[test]
+    fn validator_rejects_bad_scenario_map_tiles() {
+        let mut economy = sample_copper_island().unwrap().canonical;
+        economy.scenarios[0].map_layout.kind_rows[0][0] = "lava".to_string();
+
+        let report = validate_canonical(economy).unwrap_err();
+
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|error| matches!(error, ValidationError::ScenarioMapUnknownTileKind { .. }))
         );
     }
 }

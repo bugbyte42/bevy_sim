@@ -15,6 +15,12 @@ use crate::plugins::map::{
 const ACTIVE_SCENARIO: &str = "scenario.copper_island.power_loop";
 const SCENARIO_ENV_VAR: &str = "BEVY_SIM_SCENARIO";
 
+#[derive(Resource, Clone)]
+pub struct EconomySetup {
+    pub data: ValidatedEconomy,
+    pub scenario: Scenario,
+}
+
 #[derive(Resource)]
 pub struct EconomyState {
     pub data: ValidatedEconomy,
@@ -40,12 +46,13 @@ impl Plugin for EconomyPlugin {
             0.35,
             TimerMode::Repeating,
         )))
-        .add_systems(Startup, setup_economy)
+        .add_systems(PreStartup, load_economy_setup)
+        .add_systems(PostStartup, setup_economy)
         .add_systems(Update, (advance_economy, build_on_selected_tile));
     }
 }
 
-fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
+fn load_economy_setup(mut commands: Commands) {
     let data = match load_canonical_dir("data/canonical/v0") {
         Ok(data) => data,
         Err(err) => {
@@ -67,6 +74,13 @@ fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
             scenario.id
         );
     }
+
+    commands.insert_resource(EconomySetup { data, scenario });
+}
+
+fn setup_economy(mut commands: Commands, setup: Res<EconomySetup>, map: Res<IslandMap>) {
+    let data = setup.data.clone();
+    let scenario = setup.scenario.clone();
 
     let mut world = SimWorld::new(data.recipe_book.clone());
     for tile in &map.tiles {

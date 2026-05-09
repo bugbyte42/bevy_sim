@@ -81,6 +81,21 @@ fn describe_scenario(economy: &ValidatedEconomy, scenario: &Scenario) -> String 
     writeln!(output, "Scenario: {}", scenario.display_name).unwrap();
     writeln!(output, "id: {}", scenario.id).unwrap();
     writeln!(output, "region: {}", scenario.region).unwrap();
+    let map_width = scenario
+        .map_layout
+        .kind_rows
+        .first()
+        .map(Vec::len)
+        .unwrap_or_default();
+    writeln!(
+        output,
+        "map: {}x{} tiles, initial selection {},{}",
+        map_width,
+        scenario.map_layout.kind_rows.len(),
+        scenario.map_layout.initial_selected.col,
+        scenario.map_layout.initial_selected.row
+    )
+    .unwrap();
 
     writeln!(output, "\nStarting Inventory").unwrap();
     for quantity in &scenario.starting_inventory {
