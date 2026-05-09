@@ -1,0 +1,172 @@
+[
+  {
+    "id": "resource.wood",
+    "display_name": "Wood",
+    "category": "natural_resource",
+    "unit": "unit",
+    "tags": ["biomass", "construction", "fuel_candidate"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "resource.water",
+    "display_name": "Water",
+    "category": "natural_resource",
+    "unit": "unit",
+    "tags": ["utility", "steam_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "resource.coal",
+    "display_name": "Coal",
+    "category": "fuel",
+    "unit": "unit",
+    "tags": ["fuel", "steel_chain", "steam_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "ore.copper",
+    "display_name": "Copper Ore",
+    "category": "ore",
+    "unit": "unit",
+    "tags": ["mineral", "conductive_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "ore.iron",
+    "display_name": "Iron Ore",
+    "category": "ore",
+    "unit": "unit",
+    "tags": ["mineral", "steel_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "mineral.limestone",
+    "display_name": "Limestone",
+    "category": "mineral",
+    "unit": "unit",
+    "tags": ["flux", "steel_chain", "cement_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "labor.basic",
+    "display_name": "Labor",
+    "category": "service",
+    "unit": "unit",
+    "tags": ["population", "capacity"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "food.basic",
+    "display_name": "Food",
+    "category": "support",
+    "unit": "unit",
+    "tags": ["population", "demand"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "energy.heat",
+    "display_name": "Heat",
+    "category": "energy",
+    "unit": "unit",
+    "tags": ["energy", "steam_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "energy.electricity",
+    "display_name": "Electricity",
+    "category": "energy",
+    "unit": "unit",
+    "tags": ["energy", "electrification"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "metal.copper",
+    "display_name": "Copper Ingot",
+    "category": "metal",
+    "unit": "unit",
+    "tags": ["metal", "conductive_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "metal.iron",
+    "display_name": "Iron",
+    "category": "metal",
+    "unit": "unit",
+    "tags": ["metal", "steel_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "metal.steel",
+    "display_name": "Steel",
+    "category": "metal",
+    "unit": "unit",
+    "tags": ["metal", "construction", "machine_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "component.copper_wire",
+    "display_name": "Copper Wire",
+    "category": "component",
+    "unit": "unit",
+    "tags": ["component", "electrification", "conductive_chain"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "component.machine_parts",
+    "display_name": "Machine Parts",
+    "category": "component",
+    "unit": "unit",
+    "tags": ["component", "construction", "machine_chain"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "waste.slag",
+    "display_name": "Slag",
+    "category": "waste",
+    "unit": "unit",
+    "tags": ["waste", "smelting"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "upgrade.generator",
+    "display_name": "Generator Upgrade",
+    "category": "build_good",
+    "unit": "unit",
+    "tags": ["upgrade", "electrification"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  }
+]

@@ -1,0 +1,12 @@
+[package]
+name = "bevy_client"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+bevy.workspace = true
+sim_core.workspace = true
+sim_data.workspace = true
+

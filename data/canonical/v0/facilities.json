@@ -1,0 +1,97 @@
+[
+  {
+    "id": "facility.camp.tier1",
+    "display_name": "Camp",
+    "accepts_recipes": ["recipe.gather_wood.*"],
+    "build_cost": [{ "commodity": "resource.wood", "qty": 5.0 }],
+    "power_draw_kw": 0.0,
+    "workers_required": 2,
+    "sprite_prompt_ref": "visual.camp.small",
+    "tags": ["camp", "forest"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "facility.mine.tier1",
+    "display_name": "Mine",
+    "accepts_recipes": [
+      "recipe.mine_coal.*",
+      "recipe.mine_copper_ore.*",
+      "recipe.mine_iron_ore.*",
+      "recipe.quarry_limestone.*"
+    ],
+    "build_cost": [{ "commodity": "resource.wood", "qty": 12.0 }],
+    "power_draw_kw": 0.0,
+    "workers_required": 4,
+    "sprite_prompt_ref": "visual.mine.small",
+    "tags": ["mine", "extraction"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "facility.furnace.tier1",
+    "display_name": "Furnace",
+    "accepts_recipes": [
+      "recipe.burn_coal_for_heat.*",
+      "recipe.smelt_copper.*",
+      "recipe.smelt_iron.*",
+      "recipe.make_steel.*"
+    ],
+    "build_cost": [{ "commodity": "resource.wood", "qty": 15.0 }],
+    "power_draw_kw": 0.0,
+    "workers_required": 3,
+    "sprite_prompt_ref": "visual.furnace.small",
+    "tags": ["furnace", "smelter"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "facility.generator.tier1",
+    "display_name": "Generator",
+    "accepts_recipes": ["recipe.generate_electricity_from_heat.*"],
+    "build_cost": [
+      { "commodity": "resource.wood", "qty": 20.0 },
+      { "commodity": "metal.copper", "qty": 2.0 }
+    ],
+    "power_draw_kw": 0.0,
+    "workers_required": 3,
+    "sprite_prompt_ref": "visual.generator.small",
+    "tags": ["generator", "power"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "facility.workshop.tier1",
+    "display_name": "Workshop",
+    "accepts_recipes": [
+      "recipe.draw_copper_wire.*",
+      "recipe.machine_parts.*",
+      "recipe.generator_upgrade.*"
+    ],
+    "build_cost": [{ "commodity": "resource.wood", "qty": 18.0 }],
+    "power_draw_kw": 5.0,
+    "workers_required": 4,
+    "sprite_prompt_ref": "visual.workshop.small",
+    "tags": ["workshop", "manufacturing"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "facility.warehouse.tier1",
+    "display_name": "Warehouse",
+    "accepts_recipes": [],
+    "build_cost": [{ "commodity": "resource.wood", "qty": 10.0 }],
+    "power_draw_kw": 0.0,
+    "workers_required": 1,
+    "sprite_prompt_ref": "visual.warehouse.small",
+    "tags": ["warehouse", "storage"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  }
+]

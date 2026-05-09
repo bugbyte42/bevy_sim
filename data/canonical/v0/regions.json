@@ -1,0 +1,20 @@
+[
+  {
+    "id": "region.copper_island",
+    "display_name": "Copper Island",
+    "resources": [
+      { "commodity": "resource.wood", "abundance": 0.75 },
+      { "commodity": "resource.coal", "abundance": 0.65 },
+      { "commodity": "ore.copper", "abundance": 0.85 },
+      { "commodity": "ore.iron", "abundance": 0.35 },
+      { "commodity": "mineral.limestone", "abundance": 0.30 },
+      { "commodity": "resource.water", "abundance": 0.90 }
+    ],
+    "population": 420,
+    "trade_ports": ["copper_island.harbor"],
+    "tags": ["tutorial", "island", "electrification"],
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  }
+]

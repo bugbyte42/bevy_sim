@@ -1,0 +1,183 @@
+[
+  {
+    "id": "recipe.gather_wood.v1",
+    "display_name": "Gather Wood",
+    "inputs": [],
+    "outputs": [{ "commodity": "resource.wood", "qty": 4.0 }],
+    "byproducts": [],
+    "facility_tags": ["camp", "forest"],
+    "duration_ticks": 4,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.mine_coal.v1",
+    "display_name": "Mine Coal",
+    "inputs": [],
+    "outputs": [{ "commodity": "resource.coal", "qty": 3.0 }],
+    "byproducts": [],
+    "facility_tags": ["mine", "coal"],
+    "duration_ticks": 5,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.mine_copper_ore.v1",
+    "display_name": "Mine Copper Ore",
+    "inputs": [],
+    "outputs": [{ "commodity": "ore.copper", "qty": 3.0 }],
+    "byproducts": [],
+    "facility_tags": ["mine", "copper"],
+    "duration_ticks": 5,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.mine_iron_ore.v1",
+    "display_name": "Mine Iron Ore",
+    "inputs": [],
+    "outputs": [{ "commodity": "ore.iron", "qty": 3.0 }],
+    "byproducts": [],
+    "facility_tags": ["mine", "iron"],
+    "duration_ticks": 6,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.quarry_limestone.v1",
+    "display_name": "Quarry Limestone",
+    "inputs": [],
+    "outputs": [{ "commodity": "mineral.limestone", "qty": 3.0 }],
+    "byproducts": [],
+    "facility_tags": ["mine", "limestone"],
+    "duration_ticks": 6,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.burn_coal_for_heat.v1",
+    "display_name": "Burn Coal For Heat",
+    "inputs": [{ "commodity": "resource.coal", "qty": 2.0 }],
+    "outputs": [{ "commodity": "energy.heat", "qty": 5.0 }],
+    "byproducts": [],
+    "facility_tags": ["furnace", "boiler"],
+    "duration_ticks": 4,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.generate_electricity_from_heat.v1",
+    "display_name": "Generate Electricity From Heat",
+    "inputs": [
+      { "commodity": "energy.heat", "qty": 3.0 },
+      { "commodity": "resource.water", "qty": 1.0 }
+    ],
+    "outputs": [{ "commodity": "energy.electricity", "qty": 6.0 }],
+    "byproducts": [],
+    "facility_tags": ["generator", "steam_chain"],
+    "duration_ticks": 4,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.smelt_copper.v1",
+    "display_name": "Smelt Copper",
+    "inputs": [
+      { "commodity": "ore.copper", "qty": 4.0 },
+      { "commodity": "energy.heat", "qty": 2.0 }
+    ],
+    "outputs": [{ "commodity": "metal.copper", "qty": 1.0 }],
+    "byproducts": [{ "commodity": "waste.slag", "qty": 1.0 }],
+    "facility_tags": ["furnace", "smelter", "copper"],
+    "duration_ticks": 6,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.draw_copper_wire.v1",
+    "display_name": "Draw Copper Wire",
+    "inputs": [
+      { "commodity": "metal.copper", "qty": 1.0 },
+      { "commodity": "energy.electricity", "qty": 1.0 }
+    ],
+    "outputs": [{ "commodity": "component.copper_wire", "qty": 2.0 }],
+    "byproducts": [],
+    "facility_tags": ["workshop", "wire"],
+    "duration_ticks": 5,
+    "source_refs": [],
+    "confidence": "medium",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.smelt_iron.v1",
+    "display_name": "Smelt Iron",
+    "inputs": [
+      { "commodity": "ore.iron", "qty": 4.0 },
+      { "commodity": "resource.coal", "qty": 1.0 },
+      { "commodity": "mineral.limestone", "qty": 1.0 },
+      { "commodity": "energy.heat", "qty": 2.0 }
+    ],
+    "outputs": [{ "commodity": "metal.iron", "qty": 1.0 }],
+    "byproducts": [{ "commodity": "waste.slag", "qty": 1.0 }],
+    "facility_tags": ["furnace", "smelter", "iron"],
+    "duration_ticks": 7,
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.make_steel.v1",
+    "display_name": "Make Steel",
+    "inputs": [
+      { "commodity": "metal.iron", "qty": 2.0 },
+      { "commodity": "resource.coal", "qty": 1.0 },
+      { "commodity": "energy.heat", "qty": 2.0 }
+    ],
+    "outputs": [{ "commodity": "metal.steel", "qty": 1.0 }],
+    "byproducts": [],
+    "facility_tags": ["furnace", "steel"],
+    "duration_ticks": 8,
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.machine_parts.v1",
+    "display_name": "Assemble Machine Parts",
+    "inputs": [
+      { "commodity": "metal.steel", "qty": 1.0 },
+      { "commodity": "energy.electricity", "qty": 2.0 }
+    ],
+    "outputs": [{ "commodity": "component.machine_parts", "qty": 1.0 }],
+    "byproducts": [],
+    "facility_tags": ["workshop", "machine"],
+    "duration_ticks": 8,
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "recipe.generator_upgrade.v1",
+    "display_name": "Build Generator Upgrade",
+    "inputs": [
+      { "commodity": "component.copper_wire", "qty": 4.0 },
+      { "commodity": "metal.steel", "qty": 2.0 },
+      { "commodity": "component.machine_parts", "qty": 1.0 }
+    ],
+    "outputs": [{ "commodity": "upgrade.generator", "qty": 1.0 }],
+    "byproducts": [],
+    "facility_tags": ["workshop", "upgrade"],
+    "duration_ticks": 12,
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  }
+]
