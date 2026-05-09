@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use sim_core::{BlockReason, CommodityId, RecipeId, TickEvent, TransportBlockReason};
 
 use crate::plugins::{
-    economy::{EconomyState, goals, settlement_inventory, win_progress},
+    economy::{EconomyState, settlement_inventory, win_condition_progress},
     map::IslandMap,
     recipe_graph::RecipeGraphSelection,
 };
@@ -103,20 +103,13 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
         })
         .unwrap_or_else(|| "no tile selected".to_string());
 
-    let (electricity_goal, wire_goal) = goals();
-    let (electricity, wire) = win_progress(economy);
     let mut output = String::new();
-    output.push_str("Copper Island\n");
+    output.push_str(&format!("{}\n", economy.scenario.display_name));
     output.push_str(&format!("tick: {}\n", economy.world.tick.0));
     output.push_str(&format!("selected: {selected}\n"));
-    output.push_str(&format!(
-        "produced electricity: {:.1}/{:.1}\n",
-        electricity, electricity_goal
-    ));
-    output.push_str(&format!(
-        "produced copper wire: {:.1}/{:.1}\n",
-        wire, wire_goal
-    ));
+    for (commodity, current, target) in win_condition_progress(economy) {
+        output.push_str(&format!("{commodity}: {current:.1}/{target:.1}\n"));
+    }
     output.push_str(&format!(
         "facilities: {} | routes: {}\n",
         economy.world.facilities.len(),

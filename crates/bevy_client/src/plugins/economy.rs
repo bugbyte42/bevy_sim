@@ -1,27 +1,23 @@
 use bevy::prelude::*;
 use sim_core::{
-    CommodityId, FacilityArchetypeId, FacilityId, FacilityState, Inventory, RecipeId, SimWorld,
-    Stack, TickEvent, TransportEdge, TransportNodeId, TransportNodeState, TransportOrder,
+    CommodityId, FacilityId, FacilityState, Inventory, SimWorld, Stack, TickEvent, TransportEdge,
+    TransportNodeId, TransportNodeState, TransportOrder,
 };
-use sim_data::{Quantity, ValidatedEconomy, load_canonical_dir, sample_copper_island};
+use sim_data::{
+    BuildOption, FacilityNodePolicy, Quantity, Scenario, ValidatedEconomy, WinMetric,
+    load_canonical_dir, sample_copper_island,
+};
 
 use crate::plugins::map::{
     IslandMap, SETTLEMENT_NODE, TILE_SIZE, Tile, TileKind, facility_marker_offset,
 };
 
-const ELECTRICITY_GOAL: f64 = 100.0;
-const COPPER_WIRE_GOAL: f64 = 25.0;
-const FOREST_ONLY: &[TileKind] = &[TileKind::Forest];
-const COAL_ONLY: &[TileKind] = &[TileKind::Coal];
-const COPPER_ONLY: &[TileKind] = &[TileKind::Copper];
-const IRON_ONLY: &[TileKind] = &[TileKind::Iron];
-const LIMESTONE_ONLY: &[TileKind] = &[TileKind::Limestone];
-const SETTLEMENT_ONLY: &[TileKind] = &[TileKind::Settlement];
-const SETTLEMENT_OR_BUILDABLE: &[TileKind] = &[TileKind::Settlement, TileKind::Buildable];
+const ACTIVE_SCENARIO: &str = "scenario.copper_island.power_loop";
 
 #[derive(Resource)]
 pub struct EconomyState {
     pub data: ValidatedEconomy,
+    pub scenario: Scenario,
     pub world: SimWorld,
     pub produced_totals: Inventory,
     pub last_report: Vec<TickEvent>,
@@ -54,6 +50,12 @@ fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
             sample_copper_island().expect("bundled canonical data should validate")
         }
     };
+    let scenario = data
+        .scenarios_by_id
+        .get(ACTIVE_SCENARIO)
+        .cloned()
+        .or_else(|| data.canonical.scenarios.first().cloned())
+        .expect("canonical data should define at least one scenario");
 
     let mut world = SimWorld::new(data.recipe_book.clone());
     for tile in &map.tiles {
@@ -64,20 +66,15 @@ fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
     let settlement_inventory = world
         .node_inventory_mut(&settlement)
         .expect("settlement node is present on the tutorial island");
-    for (commodity, qty) in [
-        ("resource.wood", 90.0),
-        ("resource.water", 120.0),
-        ("resource.coal", 10.0),
-        ("food.basic", 30.0),
-        ("labor.basic", 20.0),
-    ] {
+    for quantity in &scenario.starting_inventory {
         settlement_inventory
-            .add(&CommodityId::from(commodity), qty)
+            .add(&quantity.commodity, quantity.qty)
             .expect("positive starter inventory");
     }
 
     commands.insert_resource(EconomyState {
         data,
+        scenario,
         world,
         produced_totals: Inventory::new(),
         last_report: Vec::new(),
@@ -114,13 +111,7 @@ fn advance_economy(
         }
     }
 
-    let electricity = economy
-        .produced_totals
-        .get(&CommodityId::from("energy.electricity"));
-    let copper_wire = economy
-        .produced_totals
-        .get(&CommodityId::from("component.copper_wire"));
-    if !economy.win_achieved && electricity >= ELECTRICITY_GOAL && copper_wire >= COPPER_WIRE_GOAL {
+    if !economy.win_achieved && win_conditions_met(&economy) {
         economy.win_achieved = true;
         push_status(
             &mut economy.status_log,
@@ -141,23 +132,23 @@ fn build_on_selected_tile(
     let Some(tile) = map.tile(selected).cloned() else {
         return;
     };
-    let Some(request) = requested_build(&keys, &tile) else {
+    let Some(build_option) = requested_build(&keys, &tile, &economy.scenario) else {
         return;
     };
 
-    if !request.allowed_on(tile.kind) {
+    if !build_option_allowed_on(&build_option, tile.kind) {
         push_status(
             &mut economy.status_log,
-            format!("Cannot build {} on {}", request.label, tile.kind),
+            format!("Cannot build {} on {}", build_option.label, tile.kind),
         );
         return;
     }
 
-    let archetype_id = FacilityArchetypeId::from(request.archetype);
+    let archetype_id = build_option.facility_archetype.clone();
     let Some(archetype) = economy.data.facilities_by_id.get(&archetype_id).cloned() else {
         push_status(
             &mut economy.status_log,
-            format!("Missing archetype {}", request.archetype),
+            format!("Missing archetype {}", build_option.facility_archetype),
         );
         return;
     };
@@ -195,20 +186,20 @@ fn build_on_selected_tile(
     economy.build_counter += 1;
     let facility_id = FacilityId::from(format!(
         "{}.instance.{}",
-        request.archetype, economy.build_counter
+        build_option.facility_archetype, economy.build_counter
     ));
-    let node_id = request.facility_node(&tile);
+    let node_id = facility_node(&build_option, &tile);
     let facility = FacilityState::new(
         facility_id.clone(),
         archetype_id,
-        request.recipe.map(RecipeId::from),
+        build_option.active_recipe.clone(),
     )
     .with_node(node_id.clone())
     .with_tags(archetype.tags.clone());
     economy.world.add_facility(facility);
 
-    if let Some(commodity) = request.transport_output {
-        add_route_to_settlement(&mut economy.world, &tile, CommodityId::from(commodity));
+    if let Some(commodity) = &build_option.transport_output {
+        add_route_to_settlement(&mut economy.world, &tile, commodity.clone());
     }
 
     let marker_index = map
@@ -291,140 +282,84 @@ fn push_status(status_log: &mut Vec<String>, message: String) {
     }
 }
 
-#[derive(Clone, Copy)]
-struct BuildRequest {
-    label: &'static str,
-    archetype: &'static str,
-    recipe: Option<&'static str>,
-    allowed: &'static [TileKind],
-    transport_output: Option<&'static str>,
-    use_tile_node: bool,
+fn requested_build(
+    keys: &ButtonInput<KeyCode>,
+    tile: &Tile,
+    scenario: &Scenario,
+) -> Option<BuildOption> {
+    scenario
+        .build_options
+        .iter()
+        .find(|build_option| {
+            key_just_pressed(keys, &build_option.key)
+                && build_option_allowed_on(build_option, tile.kind)
+        })
+        .cloned()
+        .or_else(|| {
+            scenario
+                .build_options
+                .iter()
+                .find(|build_option| key_just_pressed(keys, &build_option.key))
+                .cloned()
+        })
 }
 
-impl BuildRequest {
-    fn allowed_on(&self, kind: TileKind) -> bool {
-        self.allowed.contains(&kind)
-    }
-
-    fn facility_node(&self, tile: &Tile) -> TransportNodeId {
-        if self.use_tile_node {
-            tile.node_id.clone()
-        } else {
-            TransportNodeId::from(SETTLEMENT_NODE)
-        }
+fn key_just_pressed(keys: &ButtonInput<KeyCode>, key: &str) -> bool {
+    match key {
+        "Digit1" => keys.just_pressed(KeyCode::Digit1),
+        "Digit2" => keys.just_pressed(KeyCode::Digit2),
+        "Digit3" => keys.just_pressed(KeyCode::Digit3),
+        "Digit4" => keys.just_pressed(KeyCode::Digit4),
+        "Digit5" => keys.just_pressed(KeyCode::Digit5),
+        "Digit6" => keys.just_pressed(KeyCode::Digit6),
+        "Digit7" => keys.just_pressed(KeyCode::Digit7),
+        "Digit8" => keys.just_pressed(KeyCode::Digit8),
+        "Digit9" => keys.just_pressed(KeyCode::Digit9),
+        "Digit0" => keys.just_pressed(KeyCode::Digit0),
+        _ => false,
     }
 }
 
-fn requested_build(keys: &ButtonInput<KeyCode>, tile: &Tile) -> Option<BuildRequest> {
-    if keys.just_pressed(KeyCode::Digit1) {
-        return Some(BuildRequest {
-            label: "camp",
-            archetype: "facility.camp.tier1",
-            recipe: Some("recipe.gather_wood.v1"),
-            allowed: FOREST_ONLY,
-            transport_output: Some("resource.wood"),
-            use_tile_node: true,
-        });
-    }
-
-    if keys.just_pressed(KeyCode::Digit2) {
-        return mine_request(tile.kind);
-    }
-
-    if keys.just_pressed(KeyCode::Digit3) {
-        return Some(BuildRequest {
-            label: "heat furnace",
-            archetype: "facility.furnace.tier1",
-            recipe: Some("recipe.burn_coal_for_heat.v1"),
-            allowed: SETTLEMENT_ONLY,
-            transport_output: None,
-            use_tile_node: false,
-        });
-    }
-
-    if keys.just_pressed(KeyCode::Digit4) {
-        return Some(BuildRequest {
-            label: "copper furnace",
-            archetype: "facility.furnace.tier1",
-            recipe: Some("recipe.smelt_copper.v1"),
-            allowed: SETTLEMENT_ONLY,
-            transport_output: None,
-            use_tile_node: false,
-        });
-    }
-
-    if keys.just_pressed(KeyCode::Digit5) {
-        return Some(BuildRequest {
-            label: "generator",
-            archetype: "facility.generator.tier1",
-            recipe: Some("recipe.generate_electricity_from_heat.v1"),
-            allowed: SETTLEMENT_ONLY,
-            transport_output: None,
-            use_tile_node: false,
-        });
-    }
-
-    if keys.just_pressed(KeyCode::Digit6) {
-        return Some(BuildRequest {
-            label: "wire workshop",
-            archetype: "facility.workshop.tier1",
-            recipe: Some("recipe.draw_copper_wire.v1"),
-            allowed: SETTLEMENT_ONLY,
-            transport_output: None,
-            use_tile_node: false,
-        });
-    }
-
-    if keys.just_pressed(KeyCode::Digit7) {
-        return Some(BuildRequest {
-            label: "warehouse",
-            archetype: "facility.warehouse.tier1",
-            recipe: None,
-            allowed: SETTLEMENT_OR_BUILDABLE,
-            transport_output: None,
-            use_tile_node: false,
-        });
-    }
-
-    None
+fn build_option_allowed_on(build_option: &BuildOption, kind: TileKind) -> bool {
+    build_option
+        .allowed_tile_kinds
+        .iter()
+        .any(|allowed| allowed == tile_kind_key(kind))
 }
 
-fn mine_request(kind: TileKind) -> Option<BuildRequest> {
+fn tile_kind_key(kind: TileKind) -> &'static str {
     match kind {
-        TileKind::Coal => Some(BuildRequest {
-            label: "coal mine",
-            archetype: "facility.mine.tier1",
-            recipe: Some("recipe.mine_coal.v1"),
-            allowed: COAL_ONLY,
-            transport_output: Some("resource.coal"),
-            use_tile_node: true,
-        }),
-        TileKind::Copper => Some(BuildRequest {
-            label: "copper mine",
-            archetype: "facility.mine.tier1",
-            recipe: Some("recipe.mine_copper_ore.v1"),
-            allowed: COPPER_ONLY,
-            transport_output: Some("ore.copper"),
-            use_tile_node: true,
-        }),
-        TileKind::Iron => Some(BuildRequest {
-            label: "iron mine",
-            archetype: "facility.mine.tier1",
-            recipe: Some("recipe.mine_iron_ore.v1"),
-            allowed: IRON_ONLY,
-            transport_output: Some("ore.iron"),
-            use_tile_node: true,
-        }),
-        TileKind::Limestone => Some(BuildRequest {
-            label: "limestone quarry",
-            archetype: "facility.mine.tier1",
-            recipe: Some("recipe.quarry_limestone.v1"),
-            allowed: LIMESTONE_ONLY,
-            transport_output: Some("mineral.limestone"),
-            use_tile_node: true,
-        }),
-        _ => None,
+        TileKind::Water => "water",
+        TileKind::Forest => "forest",
+        TileKind::Coal => "coal",
+        TileKind::Copper => "copper",
+        TileKind::Iron => "iron",
+        TileKind::Limestone => "limestone",
+        TileKind::Settlement => "settlement",
+        TileKind::Buildable => "buildable",
     }
+}
+
+fn facility_node(build_option: &BuildOption, tile: &Tile) -> TransportNodeId {
+    match &build_option.facility_node {
+        FacilityNodePolicy::Tile => tile.node_id.clone(),
+        FacilityNodePolicy::Settlement => TransportNodeId::from(SETTLEMENT_NODE),
+    }
+}
+
+fn win_conditions_met(economy: &EconomyState) -> bool {
+    economy
+        .scenario
+        .win_conditions
+        .iter()
+        .all(|condition| match condition.metric {
+            WinMetric::ProducedTotal => {
+                economy.produced_totals.get(&condition.commodity) >= condition.qty
+            }
+            WinMetric::CurrentInventory => settlement_inventory(economy)
+                .map(|inventory| inventory.get(&condition.commodity) >= condition.qty)
+                .unwrap_or(false),
+        })
 }
 
 pub fn settlement_inventory(economy: &EconomyState) -> Option<&Inventory> {
@@ -434,17 +369,19 @@ pub fn settlement_inventory(economy: &EconomyState) -> Option<&Inventory> {
         .ok()
 }
 
-pub fn win_progress(economy: &EconomyState) -> (f64, f64) {
-    (
-        economy
-            .produced_totals
-            .get(&CommodityId::from("energy.electricity")),
-        economy
-            .produced_totals
-            .get(&CommodityId::from("component.copper_wire")),
-    )
-}
-
-pub fn goals() -> (f64, f64) {
-    (ELECTRICITY_GOAL, COPPER_WIRE_GOAL)
+pub fn win_condition_progress(economy: &EconomyState) -> Vec<(CommodityId, f64, f64)> {
+    economy
+        .scenario
+        .win_conditions
+        .iter()
+        .map(|condition| {
+            let current = match condition.metric {
+                WinMetric::ProducedTotal => economy.produced_totals.get(&condition.commodity),
+                WinMetric::CurrentInventory => settlement_inventory(economy)
+                    .map(|inventory| inventory.get(&condition.commodity))
+                    .unwrap_or_default(),
+            };
+            (condition.commodity.clone(), current, condition.qty)
+        })
+        .collect()
 }

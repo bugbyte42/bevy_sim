@@ -9,6 +9,7 @@ data/canonical/v0/commodities.json
 data/canonical/v0/recipes.json
 data/canonical/v0/facilities.json
 data/canonical/v0/regions.json
+data/canonical/v0/scenarios.json
 ```
 
 ## Shared Metadata
@@ -34,6 +35,17 @@ The validator rejects:
 - recipes with no outputs,
 - invalid facility recipe patterns,
 - invalid regional abundance values.
+- scenario references to unknown regions, facilities, recipes, commodities, or tile kinds.
+
+## Scenario Data
+
+Scenarios keep tutorial/gameplay setup out of Bevy client code:
+
+- `starting_inventory`: what the settlement begins with.
+- `win_conditions`: target commodities and whether progress is measured by produced totals or current inventory.
+- `build_options`: key binding, label, facility archetype, active recipe, allowed tile kinds, optional transported output, and whether the facility lives on the selected tile node or settlement node.
+
+This is still intentionally simple. The first goal is not a general campaign system; it is a small data seam that lets future scenarios grow without recompiling client logic for every build option.
 
 ## Extension Direction
 

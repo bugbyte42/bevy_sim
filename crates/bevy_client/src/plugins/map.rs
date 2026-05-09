@@ -181,7 +181,7 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(IslandMap::copper_island())
             .add_systems(Startup, (spawn_camera, spawn_tiles).chain())
-            .add_systems(Update, update_tile_colors);
+            .add_systems(Update, (update_tile_colors, update_facility_marker_colors));
     }
 }
 
@@ -225,6 +225,24 @@ fn update_tile_colors(map: Res<IslandMap>, mut tiles: Query<(&TileSprite, &mut S
             Color::srgb(0.62, 0.72, 0.66)
         } else {
             tile_color(tile.kind)
+        };
+    }
+}
+
+fn update_facility_marker_colors(
+    map: Res<IslandMap>,
+    mut markers: Query<(&FacilityMarker, &mut Sprite)>,
+) {
+    for (marker, mut sprite) in &mut markers {
+        let tint = if marker.facility_id.as_str().contains("mine") {
+            Color::srgb(0.92, 0.72, 0.36)
+        } else {
+            Color::srgb(0.95, 0.86, 0.44)
+        };
+        sprite.color = if Some(marker.tile_id) == map.selected {
+            Color::srgb(1.0, 0.96, 0.62)
+        } else {
+            tint
         };
     }
 }
