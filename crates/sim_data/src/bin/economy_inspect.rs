@@ -1,12 +1,13 @@
 use sim_core::{CommodityId, Inventory, RecipeId, Stack};
 use sim_data::{
-    DataLoadError, Scenario, ValidatedEconomy, WorldRegion, load_canonical_dir,
+    DataLoadError, Scenario, ValidatedEconomy, WorldRegion, WorldScenario, load_canonical_dir,
     sample_copper_island,
 };
 use std::{collections::BTreeMap, env, fmt::Write, process::ExitCode};
 
 const DEFAULT_DATA_DIR: &str = "data/canonical/v0";
 const DEFAULT_SCENARIO: &str = "scenario.copper_island.power_loop";
+const DEFAULT_WORLD_SCENARIO: &str = "world_scenario.mini_earth.electrification_corridor";
 
 fn main() -> ExitCode {
     match run(env::args().skip(1).collect()) {
@@ -36,6 +37,11 @@ fn run(args: Vec<String>) -> Result<String, String> {
             Ok(describe_map(scenario))
         }
         Command::WorldMap => Ok(describe_world_map(&economy)),
+        Command::ListWorldScenarios => Ok(list_world_scenarios(&economy)),
+        Command::WorldScenario { scenario_id } => {
+            let scenario = world_scenario(&economy, scenario_id.as_deref())?;
+            Ok(describe_world_scenario(&economy, scenario))
+        }
         Command::Commodity { commodity_id } => Ok(describe_commodity(
             &economy,
             &CommodityId::from(commodity_id),
@@ -49,6 +55,18 @@ fn run(args: Vec<String>) -> Result<String, String> {
         }
         Command::Help => Ok(usage()),
     }
+}
+
+fn list_world_scenarios(economy: &ValidatedEconomy) -> String {
+    let mut output = String::new();
+    writeln!(output, "World Scenarios").unwrap();
+    for scenario in &economy.canonical.world_scenarios {
+        writeln!(output, "- {}: {}", scenario.id, scenario.display_name).unwrap();
+        if let Some(description) = &scenario.description {
+            writeln!(output, "  {description}").unwrap();
+        }
+    }
+    output
 }
 
 fn list_scenarios(economy: &ValidatedEconomy) -> String {
@@ -73,6 +91,18 @@ fn load_economy(data_dir: &str) -> Result<ValidatedEconomy, String> {
     }
 }
 
+fn world_scenario<'a>(
+    economy: &'a ValidatedEconomy,
+    scenario_id: Option<&str>,
+) -> Result<&'a WorldScenario, String> {
+    let id = scenario_id.unwrap_or(DEFAULT_WORLD_SCENARIO);
+    economy
+        .world_scenarios_by_id
+        .get(id)
+        .or_else(|| economy.canonical.world_scenarios.first())
+        .ok_or_else(|| "no world scenarios are defined".to_string())
+}
+
 fn scenario<'a>(
     economy: &'a ValidatedEconomy,
     scenario_id: Option<&str>,
@@ -83,6 +113,87 @@ fn scenario<'a>(
         .get(id)
         .or_else(|| economy.canonical.scenarios.first())
         .ok_or_else(|| "no scenarios are defined".to_string())
+}
+
+fn describe_world_scenario(economy: &ValidatedEconomy, scenario: &WorldScenario) -> String {
+    let mut output = String::new();
+    writeln!(output, "World Scenario: {}", scenario.display_name).unwrap();
+    writeln!(output, "id: {}", scenario.id).unwrap();
+    if let Some(description) = &scenario.description {
+        writeln!(output, "description: {description}").unwrap();
+    }
+
+    if !scenario.objective_notes.is_empty() {
+        writeln!(output, "\nObjective Notes").unwrap();
+        for (index, note) in scenario.objective_notes.iter().enumerate() {
+            writeln!(output, "{}. {note}", index + 1).unwrap();
+        }
+    }
+
+    writeln!(output, "\nNodes").unwrap();
+    for node in &scenario.nodes {
+        let region_name = economy
+            .world_regions_by_id
+            .get(&node.world_region)
+            .map(|region| region.display_name.as_str())
+            .unwrap_or("unknown");
+        writeln!(
+            output,
+            "- {}: {} ({})",
+            node.id, node.display_name, region_name
+        )
+        .unwrap();
+    }
+
+    writeln!(output, "\nRoutes").unwrap();
+    for route in &scenario.routes {
+        let commodities = route
+            .commodity_filter
+            .as_ref()
+            .map(|commodities| {
+                commodities
+                    .iter()
+                    .map(|commodity| display_commodity(economy, commodity))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_else(|| "all".to_string());
+        writeln!(
+            output,
+            "- {}: {} -> {}, capacity {:.1}/tick, commodities: {}",
+            route.id, route.from, route.to, route.capacity_per_tick, commodities
+        )
+        .unwrap();
+    }
+
+    writeln!(output, "\nFacilities").unwrap();
+    for facility in &scenario.facilities {
+        let recipe = facility
+            .active_recipe
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "none".to_string());
+        writeln!(
+            output,
+            "- {} on {} -> {}",
+            facility.id, facility.node, recipe
+        )
+        .unwrap();
+    }
+
+    writeln!(output, "\nWin Conditions").unwrap();
+    for condition in &scenario.win_conditions {
+        writeln!(
+            output,
+            "- {}: {:.1} ({:?})",
+            display_commodity(economy, &condition.commodity),
+            condition.qty,
+            condition.metric
+        )
+        .unwrap();
+    }
+
+    output
 }
 
 fn describe_scenario(economy: &ValidatedEconomy, scenario: &Scenario) -> String {
@@ -240,6 +351,18 @@ fn describe_world_map(economy: &ValidatedEconomy) -> String {
     let mut output = String::new();
     writeln!(output, "World Map").unwrap();
     writeln!(output, "regions: {}", economy.canonical.world_regions.len()).unwrap();
+    writeln!(
+        output,
+        "resource profiles: {}",
+        economy.canonical.world_resource_profiles.len()
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "world scenarios: {}",
+        economy.canonical.world_scenarios.len()
+    )
+    .unwrap();
     if let Some((min_lon, min_lat, max_lon, max_lat)) =
         world_bounds(&economy.canonical.world_regions)
     {
@@ -256,6 +379,23 @@ fn describe_world_map(economy: &ValidatedEconomy) -> String {
             output,
             "- {}: {} ({}) centroid {:.2},{:.2}",
             region.id, region.display_name, region.iso_a3, region.centroid_lon, region.centroid_lat
+        )
+        .unwrap();
+    }
+
+    writeln!(output, "\nProfiled Corridor Regions").unwrap();
+    for profile in &economy.canonical.world_resource_profiles {
+        let region = economy
+            .world_regions_by_id
+            .get(&profile.world_region)
+            .map(|region| region.display_name.as_str())
+            .unwrap_or("unknown");
+        writeln!(
+            output,
+            "- {}: {} resources, {} demand entries",
+            region,
+            profile.resources.len(),
+            profile.demand.len()
         )
         .unwrap();
     }
@@ -407,6 +547,10 @@ enum Command {
         scenario_id: Option<String>,
     },
     WorldMap,
+    ListWorldScenarios,
+    WorldScenario {
+        scenario_id: Option<String>,
+    },
     Commodity {
         commodity_id: String,
     },
@@ -444,6 +588,10 @@ impl Args {
                 scenario_id: rest.get(1).cloned(),
             },
             Some("world-map") => Command::WorldMap,
+            Some("list-world-scenarios") => Command::ListWorldScenarios,
+            Some("world-scenario") => Command::WorldScenario {
+                scenario_id: rest.get(1).cloned(),
+            },
             Some("commodity") => Command::Commodity {
                 commodity_id: rest
                     .get(1)
@@ -471,6 +619,8 @@ fn usage() -> String {
         "  cargo run -p sim_data --bin economy_inspect -- scenario [scenario_id]",
         "  cargo run -p sim_data --bin economy_inspect -- map [scenario_id]",
         "  cargo run -p sim_data --bin economy_inspect -- world-map",
+        "  cargo run -p sim_data --bin economy_inspect -- list-world-scenarios",
+        "  cargo run -p sim_data --bin economy_inspect -- world-scenario [world_scenario_id]",
         "  cargo run -p sim_data --bin economy_inspect -- commodity <commodity_id>",
         "  cargo run -p sim_data --bin economy_inspect -- recipe <recipe_id> [scenario_id]",
         "",
@@ -545,9 +695,28 @@ mod tests {
 
         assert!(output.contains("World Map"));
         assert!(output.contains("regions:"));
+        assert!(output.contains("resource profiles:"));
         assert!(output.contains("bounds: lon"));
         assert!(output.contains("Sample Regions"));
+        assert!(output.contains("Profiled Corridor Regions"));
         assert!(output.contains("world."));
+    }
+
+    #[test]
+    fn world_scenario_output_mentions_corridor() {
+        let output = run(vec!["world-scenario".to_string()]).unwrap();
+
+        assert!(output.contains("World Scenario: Mini Earth Electrification Corridor"));
+        assert!(output.contains("node.world.chl"));
+        assert!(output.contains("edge.world.chl_to_usa"));
+        assert!(output.contains("Copper Wire"));
+    }
+
+    #[test]
+    fn lists_world_scenarios() {
+        let output = run(vec!["list-world-scenarios".to_string()]).unwrap();
+
+        assert!(output.contains("world_scenario.mini_earth.electrification_corridor"));
     }
 
     #[test]

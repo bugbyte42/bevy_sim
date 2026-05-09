@@ -1,6 +1,10 @@
 use bevy::{camera_controller::pan_camera::PanCamera, prelude::*};
-use sim_data::{
-    DataLoadError, ValidatedEconomy, WorldRegion, load_canonical_dir, sample_copper_island,
+use sim_data::WorldRegion;
+
+use crate::plugins::world_economy::{
+    WorldEconomyClock, WorldEconomyState, commodity_names, display_commodity, node_region_centroid,
+    resource_profile_lines, route_display_commodities, route_moved_last_tick, stack_lines,
+    world_run_state_label, world_win_condition_progress,
 };
 
 const WORLD_SCALE: f32 = 3.2;
@@ -66,12 +70,13 @@ impl Plugin for WorldMapPlugin {
     }
 }
 
-fn load_world_map(mut commands: Commands) {
-    let data = load_world_data();
-    let regions = data
+fn load_world_map(mut commands: Commands, economy: Res<WorldEconomyState>) {
+    let regions = economy
+        .data
         .canonical
         .world_regions
-        .into_iter()
+        .iter()
+        .cloned()
         .filter_map(|region| {
             bounds_for_region(&region).map(|bounds| WorldRegionView {
                 data: region,
@@ -84,17 +89,6 @@ fn load_world_map(mut commands: Commands) {
         hovered: None,
         selected: None,
     });
-}
-
-fn load_world_data() -> ValidatedEconomy {
-    match load_canonical_dir("data/canonical/v0") {
-        Ok(data) => data,
-        Err(DataLoadError::Io { .. }) => {
-            warn!("failed to load canonical data from disk, using bundled sample");
-            sample_copper_island().expect("bundled canonical data should validate")
-        }
-        Err(err) => panic!("failed to load canonical data: {err}"),
-    }
 }
 
 fn spawn_world_camera(mut commands: Commands) {
@@ -164,7 +158,12 @@ fn select_world_region(
     state.selected = state.hovered;
 }
 
-fn draw_world_regions(state: Res<WorldMapState>, mut gizmos: Gizmos) {
+fn draw_world_regions(
+    state: Res<WorldMapState>,
+    economy: Res<WorldEconomyState>,
+    mut gizmos: Gizmos,
+) {
+    draw_world_routes(&economy, &mut gizmos);
     for (index, region) in state.regions.iter().enumerate() {
         let color = if Some(index) == state.selected {
             SELECTED_LINE_COLOR
@@ -174,6 +173,33 @@ fn draw_world_regions(state: Res<WorldMapState>, mut gizmos: Gizmos) {
             REGION_LINE_COLOR
         };
         draw_region(region, color, &mut gizmos);
+    }
+}
+
+fn draw_world_routes(economy: &WorldEconomyState, gizmos: &mut Gizmos) {
+    for route in &economy.scenario.routes {
+        let Some(from) =
+            node_region_centroid(economy, &route.from).map(|(lon, lat)| project_lon_lat(lon, lat))
+        else {
+            continue;
+        };
+        let Some(to) =
+            node_region_centroid(economy, &route.to).map(|(lon, lat)| project_lon_lat(lon, lat))
+        else {
+            continue;
+        };
+        let color = if route_moved_last_tick(economy, route) {
+            Color::srgba(0.56, 0.92, 0.62, 0.92)
+        } else {
+            Color::srgba(0.96, 0.72, 0.28, 0.86)
+        };
+        gizmos.line_2d(from, to, color);
+        let midpoint = from.lerp(to, 0.5);
+        gizmos.circle_2d(
+            Isometry2d::from_translation(midpoint),
+            3.0,
+            Color::srgba(1.0, 0.88, 0.42, 0.80),
+        );
     }
 }
 
@@ -198,21 +224,45 @@ fn draw_region(region: &WorldRegionView, color: Color, gizmos: &mut Gizmos) {
 
 fn update_world_info_panel(
     state: Res<WorldMapState>,
+    economy: Res<WorldEconomyState>,
+    clock: Res<WorldEconomyClock>,
     mut text_query: Query<&mut Text, With<WorldInfoText>>,
 ) {
     let Ok(mut text) = text_query.single_mut() else {
         return;
     };
     text.clear();
-    text.push_str(&world_info_panel(&state));
+    text.push_str(&world_info_panel(&state, &economy, &clock));
 }
 
-fn world_info_panel(state: &WorldMapState) -> String {
+fn world_info_panel(
+    state: &WorldMapState,
+    economy: &WorldEconomyState,
+    clock: &WorldEconomyClock,
+) -> String {
     let mut output = String::new();
     output.push_str("Mini Earth Geometry\n");
     output.push_str(&format!("- regions: {}\n", state.regions.len()));
     output.push_str("- view: equirectangular 1:110m Natural Earth\n");
-    output.push_str("- controls: pan/zoom with mouse, click a region\n");
+    output.push_str("- controls: pan/zoom, click region, Space pause, . step, F5 reset\n");
+    output.push_str(&format!(
+        "- scenario: {} | {} | tick {}\n",
+        economy.scenario.display_name,
+        world_run_state_label(economy.run_state),
+        economy.world.tick.0
+    ));
+    output.push_str(&format!("- sim speed: {:.2}s\n", clock.tick_seconds()));
+
+    output.push_str("\nWorld Objectives\n");
+    for note in &economy.scenario.objective_notes {
+        output.push_str(&format!("- {note}\n"));
+    }
+    for (commodity, current, target) in world_win_condition_progress(economy) {
+        output.push_str(&format!(
+            "- {}: {current:.1}/{target:.1}\n",
+            display_commodity(economy, &commodity)
+        ));
+    }
 
     if let Some(index) = state.selected.or(state.hovered) {
         let region = &state.regions[index];
@@ -236,14 +286,47 @@ fn world_info_panel(state: &WorldMapState) -> String {
             output.push_str(&format!("  - {tag}\n"));
         }
         output.push_str("\nResource Summary\n");
-        output.push_str("- not connected to economy profiles yet\n");
+        output.push_str(&resource_summary(economy, &region.data.id));
     } else {
         output.push_str("\nSelected Region\n");
         output.push_str("- hover or click a country outline\n");
         output.push_str("\nResource Summary\n");
-        output.push_str("- placeholder for Phase E corridor data\n");
+        output.push_str("- hover a corridor region to see static resource profile\n");
     }
 
+    output.push_str("\nCorridor Routes\n");
+    for route in &economy.scenario.routes {
+        output.push_str(&format!(
+            "- {} -> {} ({})\n",
+            route.from,
+            route.to,
+            commodity_names(economy, &route_display_commodities(route))
+        ));
+    }
+
+    output.push_str("\nRecent Flow\n");
+    let moved = stack_lines(economy.last_ledger.moved_in(), 4);
+    if moved.is_empty() {
+        output.push_str("- waiting for corridor movement\n");
+    } else {
+        for stack in moved {
+            output.push_str(&format!(
+                "- moved {} {:.1}\n",
+                display_commodity(economy, &stack.commodity),
+                stack.qty
+            ));
+        }
+    }
+
+    output
+}
+
+fn resource_summary(economy: &WorldEconomyState, world_region: &str) -> String {
+    let mut output = String::new();
+    for line in resource_profile_lines(economy, world_region) {
+        output.push_str(&line);
+        output.push('\n');
+    }
     output
 }
 

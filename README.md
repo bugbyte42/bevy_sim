@@ -41,6 +41,7 @@ cargo run -p sim_data --bin economy_inspect -- list-scenarios
 cargo run -p sim_data --bin economy_inspect -- map scenario.copper_island.logistics_squeeze
 cargo run -p sim_data --bin economy_inspect -- scenario scenario.copper_island.steel_gate
 cargo run -p sim_data --bin economy_inspect -- world-map
+cargo run -p sim_data --bin economy_inspect -- world-scenario
 cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
 ```
@@ -88,3 +89,13 @@ BEVY_SIM_VIEW=world cargo run -p bevy_client
 ```
 
 World mode renders the checked-in country outlines with a simple equirectangular projection. It supports pan/zoom, hover/select by region bounding box, and an inspector panel with id, name, ISO code, centroid, tags, and placeholder resource summary. The island economy remains the default mode.
+
+Launch the globe viewer with:
+
+```bash
+BEVY_SIM_VIEW=globe cargo run -p bevy_client
+```
+
+Globe mode wraps the same canonical country outlines onto a 3D earth, with a black background, faint deterministic star field, drag orbit, scroll zoom, ray-to-globe hover/select, and the same region metadata inspector.
+
+World and globe modes also run the first Mini Earth corridor scenario from `data/canonical/v0/world_scenarios.json`. The full map stays visual context, while the simulation runs only on selected region nodes for Chile, Australia, Canada, and the United States. Press `Space` to pause/resume the corridor sim, `.` to step while paused, `[` / `]` to adjust tick speed, and `F5` to reset the corridor. Set `BEVY_WORLD_SCENARIO=world_scenario.mini_earth.electrification_corridor` to choose a world scenario explicitly once more are added.

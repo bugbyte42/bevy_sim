@@ -1,0 +1,167 @@
+[
+  {
+    "id": "world_scenario.mini_earth.electrification_corridor",
+    "display_name": "Mini Earth Electrification Corridor",
+    "description": "A tiny real-map corridor that moves copper, coal, timber, water, and limestone into one demand region for an electrification loop.",
+    "objective_notes": [
+      "Mine copper in Chile and route ore to the demand region.",
+      "Move coal and timber through prewired corridor routes.",
+      "Produce electricity and copper wire in the United States node without simulating a global economy."
+    ],
+    "nodes": [
+      {
+        "id": "node.world.chl",
+        "world_region": "world.chl",
+        "display_name": "Chile Copper Node"
+      },
+      {
+        "id": "node.world.aus",
+        "world_region": "world.aus",
+        "display_name": "Australia Coal and Iron Node"
+      },
+      {
+        "id": "node.world.can",
+        "world_region": "world.can",
+        "display_name": "Canada Timber and Water Node"
+      },
+      {
+        "id": "node.world.usa",
+        "world_region": "world.usa",
+        "display_name": "United States Electrification Demand Node"
+      }
+    ],
+    "starting_inventory": [
+      {
+        "node": "node.world.usa",
+        "quantities": [
+          { "commodity": "resource.water", "qty": 240.0 },
+          { "commodity": "resource.wood", "qty": 30.0 }
+        ]
+      }
+    ],
+    "facilities": [
+      {
+        "id": "facility.world.chl.copper_mine",
+        "archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_copper_ore.v1",
+        "node": "node.world.chl",
+        "tags": ["mine", "copper", "world_corridor"]
+      },
+      {
+        "id": "facility.world.aus.coal_mine",
+        "archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.mine_coal.v1",
+        "node": "node.world.aus",
+        "tags": ["mine", "coal", "world_corridor"]
+      },
+      {
+        "id": "facility.world.can.timber_camp",
+        "archetype": "facility.camp.tier1",
+        "active_recipe": "recipe.gather_wood.v1",
+        "node": "node.world.can",
+        "tags": ["camp", "timber", "world_corridor"]
+      },
+      {
+        "id": "facility.world.usa.limestone_quarry",
+        "archetype": "facility.mine.tier1",
+        "active_recipe": "recipe.quarry_limestone.v1",
+        "node": "node.world.usa",
+        "tags": ["mine", "limestone", "world_corridor"]
+      },
+      {
+        "id": "facility.world.usa.heat_furnace",
+        "archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.burn_coal_for_heat.v1",
+        "node": "node.world.usa",
+        "tags": ["furnace", "heat", "world_corridor"]
+      },
+      {
+        "id": "facility.world.usa.generator",
+        "archetype": "facility.generator.tier1",
+        "active_recipe": "recipe.generate_electricity_from_heat.v1",
+        "node": "node.world.usa",
+        "tags": ["generator", "power", "world_corridor"]
+      },
+      {
+        "id": "facility.world.usa.copper_furnace",
+        "archetype": "facility.furnace.tier1",
+        "active_recipe": "recipe.smelt_copper.v1",
+        "node": "node.world.usa",
+        "tags": ["furnace", "copper", "world_corridor"]
+      },
+      {
+        "id": "facility.world.usa.wire_workshop",
+        "archetype": "facility.workshop.tier1",
+        "active_recipe": "recipe.draw_copper_wire.v1",
+        "node": "node.world.usa",
+        "tags": ["workshop", "wire", "world_corridor"]
+      }
+    ],
+    "routes": [
+      {
+        "id": "edge.world.chl_to_usa",
+        "from": "node.world.chl",
+        "to": "node.world.usa",
+        "capacity_per_tick": 4.0,
+        "distance_cost": 7.5,
+        "commodity_filter": ["ore.copper"],
+        "orders": [
+          {
+            "id": "order.world.chl_to_usa.copper_ore",
+            "commodity": "ore.copper",
+            "target_qty_at_destination": 180.0,
+            "max_qty_per_tick": 4.0
+          }
+        ]
+      },
+      {
+        "id": "edge.world.aus_to_usa",
+        "from": "node.world.aus",
+        "to": "node.world.usa",
+        "capacity_per_tick": 5.0,
+        "distance_cost": 10.0,
+        "commodity_filter": ["resource.coal", "ore.iron"],
+        "orders": [
+          {
+            "id": "order.world.aus_to_usa.coal",
+            "commodity": "resource.coal",
+            "target_qty_at_destination": 160.0,
+            "max_qty_per_tick": 5.0
+          }
+        ]
+      },
+      {
+        "id": "edge.world.can_to_usa",
+        "from": "node.world.can",
+        "to": "node.world.usa",
+        "capacity_per_tick": 3.0,
+        "distance_cost": 2.0,
+        "commodity_filter": ["resource.wood"],
+        "orders": [
+          {
+            "id": "order.world.can_to_usa.wood",
+            "commodity": "resource.wood",
+            "target_qty_at_destination": 100.0,
+            "max_qty_per_tick": 3.0
+          }
+        ]
+      }
+    ],
+    "win_conditions": [
+      {
+        "commodity": "energy.electricity",
+        "qty": 60.0,
+        "metric": "produced_total"
+      },
+      {
+        "commodity": "component.copper_wire",
+        "qty": 12.0,
+        "metric": "produced_total"
+      }
+    ],
+    "tags": ["mini_earth", "corridor", "electrification", "phase_e"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  }
+]

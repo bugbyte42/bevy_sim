@@ -7,8 +7,8 @@ use bevy::{
 mod plugins;
 
 use plugins::{
-    DebugUiPlugin, EconomyPlugin, InputPlugin, LogisticsPlugin, MapPlugin, RecipeGraphPlugin,
-    WorldMapPlugin,
+    DebugUiPlugin, EconomyPlugin, GlobeMapPlugin, InputPlugin, LogisticsPlugin, MapPlugin,
+    RecipeGraphPlugin, WorldEconomyPlugin, WorldMapPlugin,
 };
 
 const VIEW_ENV_VAR: &str = "BEVY_SIM_VIEW";
@@ -17,12 +17,13 @@ const VIEW_ENV_VAR: &str = "BEVY_SIM_VIEW";
 enum AppView {
     Island,
     World,
+    Globe,
 }
 
 fn main() {
     let view = app_view();
     let mut app = App::new();
-    app.insert_resource(ClearColor(Color::srgb(0.05, 0.07, 0.08)))
+    app.insert_resource(ClearColor(view_clear_color(view)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: window_title(view).to_string(),
@@ -46,7 +47,10 @@ fn main() {
             ));
         }
         AppView::World => {
-            app.add_plugins(WorldMapPlugin);
+            app.add_plugins((WorldEconomyPlugin, WorldMapPlugin));
+        }
+        AppView::Globe => {
+            app.add_plugins((WorldEconomyPlugin, GlobeMapPlugin));
         }
     }
 
@@ -59,6 +63,7 @@ fn app_view() -> AppView {
         .to_lowercase()
         .as_str()
     {
+        "globe" => AppView::Globe,
         "world" => AppView::World,
         "island" => AppView::Island,
         other => {
@@ -72,5 +77,13 @@ fn window_title(view: AppView) -> &'static str {
     match view {
         AppView::Island => "Copper Island Power Loop",
         AppView::World => "Mini Earth Geometry Workbench",
+        AppView::Globe => "Mini Earth Globe Viewer",
+    }
+}
+
+fn view_clear_color(view: AppView) -> Color {
+    match view {
+        AppView::Globe => Color::BLACK,
+        AppView::Island | AppView::World => Color::srgb(0.05, 0.07, 0.08),
     }
 }

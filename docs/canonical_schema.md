@@ -10,7 +10,9 @@ data/canonical/v0/recipes.json
 data/canonical/v0/facilities.json
 data/canonical/v0/regions.json
 data/canonical/v0/world_regions.json
+data/canonical/v0/world_resource_profiles.json
 data/canonical/v0/scenarios.json
+data/canonical/v0/world_scenarios.json
 ```
 
 ## Shared Metadata
@@ -78,6 +80,28 @@ The Bevy client can render this file as a standalone workbench without running t
 BEVY_SIM_VIEW=world cargo run -p bevy_client
 ```
 
+Or as a plain 3D globe viewer:
+
+```bash
+BEVY_SIM_VIEW=globe cargo run -p bevy_client
+```
+
+## Mini Earth Corridor Data
+
+`world_resource_profiles.json` adds hand-authored static resource/demand profiles to a small set of world regions. These are deliberately lightweight bridge records, not a claim that the whole world economy is modeled.
+
+`world_scenarios.json` defines selected corridor simulations over real map regions:
+
+- `nodes`: named simulation nodes mapped to `world_regions.json` ids.
+- `starting_inventory`: per-node initial stock.
+- `facilities`: prewired pure-sim facilities and active recipes.
+- `routes`: prewired transport edges and orders.
+- `win_conditions`: produced or stocked targets, using the same commodity ids as the island economy.
+
+The first corridor is `world_scenario.mini_earth.electrification_corridor`, which moves copper ore, coal, and timber into a demand node and produces electricity plus copper wire. The full world remains visual context; the simulation only runs on those selected nodes.
+
+World-mode scenario selection uses `BEVY_WORLD_SCENARIO`; if it is unset, the electrification corridor is used.
+
 ## Extension Direction
 
 Prefer adding optional fields or new versioned files over changing existing meanings. The expected future path is:
@@ -100,6 +124,7 @@ cargo run -p sim_data --bin economy_inspect -- list-scenarios
 cargo run -p sim_data --bin economy_inspect -- map scenario.copper_island.logistics_squeeze
 cargo run -p sim_data --bin economy_inspect -- scenario scenario.copper_island.steel_gate
 cargo run -p sim_data --bin economy_inspect -- world-map
+cargo run -p sim_data --bin economy_inspect -- world-scenario
 cargo run -p sim_data --bin economy_inspect -- commodity component.copper_wire
 cargo run -p sim_data --bin economy_inspect -- recipe recipe.draw_copper_wire.v1
 ```

@@ -4,7 +4,10 @@
 //! deterministic simulation crate.
 
 use serde::{Deserialize, Serialize};
-use sim_core::{CommodityId, FacilityArchetypeId, Recipe, RecipeBook, RecipeId, RegionId, Stack};
+use sim_core::{
+    CommodityId, FacilityArchetypeId, FacilityId, Recipe, RecipeBook, RecipeId, RegionId, Stack,
+    TransportEdgeId, TransportNodeId, TransportOrderId,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -144,6 +147,18 @@ pub struct WorldRegion {
     pub authored_status: AuthoredStatus,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldResourceProfile {
+    pub id: String,
+    pub world_region: String,
+    pub resources: Vec<RegionResource>,
+    pub demand: Vec<Quantity>,
+    pub tags: Vec<String>,
+    pub source_refs: Vec<SourceRef>,
+    pub confidence: Confidence,
+    pub authored_status: AuthoredStatus,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WinMetric {
@@ -207,6 +222,66 @@ pub struct Scenario {
     pub authored_status: AuthoredStatus,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldScenarioNode {
+    pub id: TransportNodeId,
+    pub world_region: String,
+    pub display_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldScenarioInventory {
+    pub node: TransportNodeId,
+    pub quantities: Vec<Quantity>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldScenarioFacility {
+    pub id: FacilityId,
+    pub archetype: FacilityArchetypeId,
+    pub active_recipe: Option<RecipeId>,
+    pub node: TransportNodeId,
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldScenarioTransportOrder {
+    pub id: TransportOrderId,
+    pub commodity: CommodityId,
+    pub target_qty_at_destination: f64,
+    pub max_qty_per_tick: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldScenarioRoute {
+    pub id: TransportEdgeId,
+    pub from: TransportNodeId,
+    pub to: TransportNodeId,
+    pub capacity_per_tick: f64,
+    pub distance_cost: f64,
+    pub commodity_filter: Option<Vec<CommodityId>>,
+    pub orders: Vec<WorldScenarioTransportOrder>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldScenario {
+    pub id: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub objective_notes: Vec<String>,
+    pub nodes: Vec<WorldScenarioNode>,
+    pub starting_inventory: Vec<WorldScenarioInventory>,
+    pub facilities: Vec<WorldScenarioFacility>,
+    pub routes: Vec<WorldScenarioRoute>,
+    pub win_conditions: Vec<WinCondition>,
+    pub tags: Vec<String>,
+    pub source_refs: Vec<SourceRef>,
+    pub confidence: Confidence,
+    pub authored_status: AuthoredStatus,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CanonicalEconomy {
     pub commodities: Vec<Commodity>,
@@ -214,7 +289,9 @@ pub struct CanonicalEconomy {
     pub facilities: Vec<FacilityArchetype>,
     pub regions: Vec<RegionProfile>,
     pub world_regions: Vec<WorldRegion>,
+    pub world_resource_profiles: Vec<WorldResourceProfile>,
     pub scenarios: Vec<Scenario>,
+    pub world_scenarios: Vec<WorldScenario>,
 }
 
 impl CanonicalEconomy {
@@ -231,6 +308,8 @@ pub struct ValidatedEconomy {
     pub recipes_by_id: BTreeMap<RecipeId, ProcessRecipe>,
     pub scenarios_by_id: BTreeMap<String, Scenario>,
     pub world_regions_by_id: BTreeMap<String, WorldRegion>,
+    pub world_resource_profiles_by_region: BTreeMap<String, WorldResourceProfile>,
+    pub world_scenarios_by_id: BTreeMap<String, WorldScenario>,
     pub recipe_book: RecipeBook,
 }
 
@@ -276,6 +355,27 @@ pub enum ValidationError {
     WorldRegionWithoutGeometry { region: String },
     #[error("world region {region} has invalid coordinate lon/lat {lon},{lat}")]
     InvalidWorldRegionCoordinate { region: String, lon: f64, lat: f64 },
+    #[error("{owner} references unknown world region {world_region}")]
+    UnknownWorldRegion { owner: String, world_region: String },
+    #[error("world scenario {scenario} references unknown node {node}")]
+    UnknownWorldScenarioNode {
+        scenario: String,
+        node: TransportNodeId,
+    },
+    #[error("world scenario {scenario} references unknown facility {facility}")]
+    UnknownWorldScenarioFacility {
+        scenario: String,
+        facility: FacilityArchetypeId,
+    },
+    #[error("world scenario {scenario} references unknown recipe {recipe}")]
+    UnknownWorldScenarioRecipe { scenario: String, recipe: RecipeId },
+    #[error("world scenario {scenario} route {route} must have positive capacity")]
+    InvalidWorldScenarioRouteCapacity {
+        scenario: String,
+        route: TransportEdgeId,
+    },
+    #[error("world scenario {scenario} must define at least one win condition")]
+    WorldScenarioWithoutWinCondition { scenario: String },
     #[error("scenario {scenario} references unknown region {region}")]
     UnknownRegion { scenario: String, region: RegionId },
     #[error("scenario {scenario} references unknown facility {facility}")]
@@ -351,7 +451,9 @@ pub fn load_canonical_dir(path: impl AsRef<Path>) -> Result<ValidatedEconomy, Da
         facilities: load_json_file(path.join("facilities.json"))?,
         regions: load_json_file(path.join("regions.json"))?,
         world_regions: load_json_file(path.join("world_regions.json"))?,
+        world_resource_profiles: load_json_file(path.join("world_resource_profiles.json"))?,
         scenarios: load_json_file(path.join("scenarios.json"))?,
+        world_scenarios: load_json_file(path.join("world_scenarios.json"))?,
     };
     validate_canonical(economy).map_err(Into::into)
 }
@@ -378,9 +480,17 @@ pub fn sample_copper_island() -> Result<ValidatedEconomy, DataLoadError> {
             "data/canonical/v0/world_regions.json",
             include_str!("../../../data/canonical/v0/world_regions.json"),
         )?,
+        world_resource_profiles: parse_json_str(
+            "data/canonical/v0/world_resource_profiles.json",
+            include_str!("../../../data/canonical/v0/world_resource_profiles.json"),
+        )?,
         scenarios: parse_json_str(
             "data/canonical/v0/scenarios.json",
             include_str!("../../../data/canonical/v0/scenarios.json"),
+        )?,
+        world_scenarios: parse_json_str(
+            "data/canonical/v0/world_scenarios.json",
+            include_str!("../../../data/canonical/v0/world_scenarios.json"),
         )?,
     };
     validate_canonical(economy).map_err(Into::into)
@@ -394,7 +504,10 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
     let facilities_by_id = collect_facilities(&economy.facilities, &mut errors);
     let region_ids = collect_regions(&economy.regions, &mut errors);
     let world_regions_by_id = collect_world_regions(&economy.world_regions, &mut errors);
+    let world_resource_profiles_by_region =
+        collect_world_resource_profiles(&economy.world_resource_profiles, &mut errors);
     let scenarios_by_id = collect_scenarios(&economy.scenarios, &mut errors);
+    let world_scenarios_by_id = collect_world_scenarios(&economy.world_scenarios, &mut errors);
 
     for commodity in &economy.commodities {
         validate_common(
@@ -514,6 +627,44 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
         validate_world_geometry(world_region, &mut errors);
     }
 
+    for profile in &economy.world_resource_profiles {
+        validate_common(
+            "world_resource_profile",
+            profile.id.clone(),
+            &profile.id,
+            &profile.source_refs,
+            &profile.authored_status,
+            &mut errors,
+        );
+        if !world_regions_by_id.contains_key(&profile.world_region) {
+            errors.push(ValidationError::UnknownWorldRegion {
+                owner: profile.id.clone(),
+                world_region: profile.world_region.clone(),
+            });
+        }
+        for resource in &profile.resources {
+            if !commodities_by_id.contains_key(&resource.commodity) {
+                errors.push(ValidationError::UnknownCommodity {
+                    owner: profile.id.clone(),
+                    commodity: resource.commodity.clone(),
+                });
+            }
+            if !(0.0..=1.0).contains(&resource.abundance) {
+                errors.push(ValidationError::InvalidAbundance {
+                    region: RegionId::from(profile.world_region.clone()),
+                    commodity: resource.commodity.clone(),
+                    abundance: resource.abundance,
+                });
+            }
+        }
+        validate_quantities(
+            profile.id.clone(),
+            profile.demand.iter(),
+            &commodities_by_id,
+            &mut errors,
+        );
+    }
+
     for scenario in &economy.scenarios {
         validate_common(
             "scenario",
@@ -597,6 +748,17 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
         }
     }
 
+    for scenario in &economy.world_scenarios {
+        validate_world_scenario(
+            scenario,
+            &world_regions_by_id,
+            &commodities_by_id,
+            &facilities_by_id,
+            &recipe_ids,
+            &mut errors,
+        );
+    }
+
     if !errors.is_empty() {
         return Err(ValidationReport { errors });
     }
@@ -609,6 +771,8 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
         recipes_by_id,
         scenarios_by_id,
         world_regions_by_id,
+        world_resource_profiles_by_region,
+        world_scenarios_by_id,
         recipe_book,
     })
 }
@@ -758,6 +922,145 @@ fn validate_world_geometry(world_region: &WorldRegion, errors: &mut Vec<Validati
     }
 }
 
+fn validate_world_scenario(
+    scenario: &WorldScenario,
+    world_regions_by_id: &BTreeMap<String, WorldRegion>,
+    commodities_by_id: &BTreeMap<CommodityId, Commodity>,
+    facilities_by_id: &BTreeMap<FacilityArchetypeId, FacilityArchetype>,
+    recipe_ids: &BTreeSet<RecipeId>,
+    errors: &mut Vec<ValidationError>,
+) {
+    validate_common(
+        "world_scenario",
+        scenario.id.clone(),
+        &scenario.display_name,
+        &scenario.source_refs,
+        &scenario.authored_status,
+        errors,
+    );
+    let mut node_ids = BTreeSet::new();
+    for node in &scenario.nodes {
+        if !node_ids.insert(node.id.clone()) {
+            errors.push(ValidationError::DuplicateId {
+                entity: "world_scenario_node",
+                id: node.id.to_string(),
+            });
+        }
+        if !world_regions_by_id.contains_key(&node.world_region) {
+            errors.push(ValidationError::UnknownWorldRegion {
+                owner: scenario.id.clone(),
+                world_region: node.world_region.clone(),
+            });
+        }
+    }
+
+    for inventory in &scenario.starting_inventory {
+        validate_world_scenario_node_ref(scenario, &inventory.node, &node_ids, errors);
+        validate_quantities(
+            scenario.id.clone(),
+            inventory.quantities.iter(),
+            commodities_by_id,
+            errors,
+        );
+    }
+
+    for facility in &scenario.facilities {
+        if !facilities_by_id.contains_key(&facility.archetype) {
+            errors.push(ValidationError::UnknownWorldScenarioFacility {
+                scenario: scenario.id.clone(),
+                facility: facility.archetype.clone(),
+            });
+        }
+        if let Some(recipe) = &facility.active_recipe
+            && !recipe_ids.contains(recipe)
+        {
+            errors.push(ValidationError::UnknownWorldScenarioRecipe {
+                scenario: scenario.id.clone(),
+                recipe: recipe.clone(),
+            });
+        }
+        validate_world_scenario_node_ref(scenario, &facility.node, &node_ids, errors);
+    }
+
+    for route in &scenario.routes {
+        if route.capacity_per_tick <= 0.0 {
+            errors.push(ValidationError::InvalidWorldScenarioRouteCapacity {
+                scenario: scenario.id.clone(),
+                route: route.id.clone(),
+            });
+        }
+        validate_world_scenario_node_ref(scenario, &route.from, &node_ids, errors);
+        validate_world_scenario_node_ref(scenario, &route.to, &node_ids, errors);
+        if let Some(filter) = &route.commodity_filter {
+            for commodity in filter {
+                if !commodities_by_id.contains_key(commodity) {
+                    errors.push(ValidationError::UnknownCommodity {
+                        owner: scenario.id.clone(),
+                        commodity: commodity.clone(),
+                    });
+                }
+            }
+        }
+        for order in &route.orders {
+            if !commodities_by_id.contains_key(&order.commodity) {
+                errors.push(ValidationError::UnknownCommodity {
+                    owner: scenario.id.clone(),
+                    commodity: order.commodity.clone(),
+                });
+            }
+            if order.target_qty_at_destination < 0.0 {
+                errors.push(ValidationError::NegativeQuantity {
+                    owner: scenario.id.clone(),
+                    commodity: order.commodity.clone(),
+                    qty: order.target_qty_at_destination,
+                });
+            }
+            if order.max_qty_per_tick < 0.0 {
+                errors.push(ValidationError::NegativeQuantity {
+                    owner: scenario.id.clone(),
+                    commodity: order.commodity.clone(),
+                    qty: order.max_qty_per_tick,
+                });
+            }
+        }
+    }
+
+    if scenario.win_conditions.is_empty() {
+        errors.push(ValidationError::WorldScenarioWithoutWinCondition {
+            scenario: scenario.id.clone(),
+        });
+    }
+    for win_condition in &scenario.win_conditions {
+        if !commodities_by_id.contains_key(&win_condition.commodity) {
+            errors.push(ValidationError::UnknownCommodity {
+                owner: scenario.id.clone(),
+                commodity: win_condition.commodity.clone(),
+            });
+        }
+        if win_condition.qty < 0.0 {
+            errors.push(ValidationError::NegativeQuantity {
+                owner: scenario.id.clone(),
+                commodity: win_condition.commodity.clone(),
+                qty: win_condition.qty,
+            });
+        }
+    }
+}
+
+fn validate_world_scenario_node_ref(
+    scenario: &WorldScenario,
+    node: &TransportNodeId,
+    node_ids: &BTreeSet<TransportNodeId>,
+    errors: &mut Vec<ValidationError>,
+) {
+    if !node_ids.contains(node) {
+        errors.push(ValidationError::UnknownWorldScenarioNode {
+            scenario: scenario.id.clone(),
+            node: node.clone(),
+        });
+    }
+}
+
 fn valid_lon_lat(lon: f64, lat: f64) -> bool {
     (-180.0..=180.0).contains(&lon) && (-90.0..=90.0).contains(&lat)
 }
@@ -862,6 +1165,31 @@ fn collect_world_regions(
     map
 }
 
+fn collect_world_resource_profiles(
+    profiles: &[WorldResourceProfile],
+    errors: &mut Vec<ValidationError>,
+) -> BTreeMap<String, WorldResourceProfile> {
+    let mut seen_ids = BTreeSet::new();
+    let mut seen_regions = BTreeSet::new();
+    let mut map = BTreeMap::new();
+    for profile in profiles {
+        if !seen_ids.insert(profile.id.clone()) {
+            errors.push(ValidationError::DuplicateId {
+                entity: "world_resource_profile",
+                id: profile.id.clone(),
+            });
+        }
+        if !seen_regions.insert(profile.world_region.clone()) {
+            errors.push(ValidationError::DuplicateId {
+                entity: "world_resource_profile_region",
+                id: profile.world_region.clone(),
+            });
+        }
+        map.insert(profile.world_region.clone(), profile.clone());
+    }
+    map
+}
+
 fn collect_scenarios(
     scenarios: &[Scenario],
     errors: &mut Vec<ValidationError>,
@@ -872,6 +1200,24 @@ fn collect_scenarios(
         if !seen.insert(scenario.id.clone()) {
             errors.push(ValidationError::DuplicateId {
                 entity: "scenario",
+                id: scenario.id.clone(),
+            });
+        }
+        map.insert(scenario.id.clone(), scenario.clone());
+    }
+    map
+}
+
+fn collect_world_scenarios(
+    scenarios: &[WorldScenario],
+    errors: &mut Vec<ValidationError>,
+) -> BTreeMap<String, WorldScenario> {
+    let mut seen = BTreeSet::new();
+    let mut map = BTreeMap::new();
+    for scenario in scenarios {
+        if !seen.insert(scenario.id.clone()) {
+            errors.push(ValidationError::DuplicateId {
+                entity: "world_scenario",
                 id: scenario.id.clone(),
             });
         }
@@ -932,6 +1278,16 @@ mod tests {
             economy
                 .recipes_by_id
                 .contains_key(&RecipeId::from("recipe.generator_upgrade.v1"))
+        );
+        assert!(
+            economy
+                .world_scenarios_by_id
+                .contains_key("world_scenario.mini_earth.electrification_corridor")
+        );
+        assert!(
+            economy
+                .world_resource_profiles_by_region
+                .contains_key("world.chl")
         );
     }
 
@@ -1050,6 +1406,21 @@ mod tests {
                 .errors
                 .iter()
                 .any(|error| matches!(error, ValidationError::InvalidWorldRegionIsoA3 { .. }))
+        );
+    }
+
+    #[test]
+    fn validator_rejects_bad_world_scenario_node_refs() {
+        let mut economy = sample_copper_island().unwrap().canonical;
+        economy.world_scenarios[0].routes[0].from = TransportNodeId::from("node.world.missing");
+
+        let report = validate_canonical(economy).unwrap_err();
+
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|error| matches!(error, ValidationError::UnknownWorldScenarioNode { .. }))
         );
     }
 }

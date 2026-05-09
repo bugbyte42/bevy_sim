@@ -1,0 +1,60 @@
+[
+  {
+    "id": "world_resource_profile.chl.v0",
+    "world_region": "world.chl",
+    "resources": [
+      { "commodity": "ore.copper", "abundance": 0.95 },
+      { "commodity": "resource.water", "abundance": 0.35 }
+    ],
+    "demand": [{ "commodity": "component.copper_wire", "qty": 20.0 }],
+    "tags": ["corridor_candidate", "copper"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "world_resource_profile.aus.v0",
+    "world_region": "world.aus",
+    "resources": [
+      { "commodity": "resource.coal", "abundance": 0.90 },
+      { "commodity": "ore.iron", "abundance": 0.95 },
+      { "commodity": "mineral.limestone", "abundance": 0.50 },
+      { "commodity": "resource.water", "abundance": 0.30 }
+    ],
+    "demand": [{ "commodity": "energy.electricity", "qty": 20.0 }],
+    "tags": ["corridor_candidate", "coal", "iron"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "world_resource_profile.can.v0",
+    "world_region": "world.can",
+    "resources": [
+      { "commodity": "resource.wood", "abundance": 0.85 },
+      { "commodity": "resource.water", "abundance": 0.95 }
+    ],
+    "demand": [{ "commodity": "component.machine_parts", "qty": 5.0 }],
+    "tags": ["corridor_candidate", "timber", "water"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  },
+  {
+    "id": "world_resource_profile.usa.v0",
+    "world_region": "world.usa",
+    "resources": [
+      { "commodity": "resource.water", "abundance": 0.80 },
+      { "commodity": "mineral.limestone", "abundance": 0.65 },
+      { "commodity": "resource.coal", "abundance": 0.70 }
+    ],
+    "demand": [
+      { "commodity": "energy.electricity", "qty": 60.0 },
+      { "commodity": "component.copper_wire", "qty": 12.0 }
+    ],
+    "tags": ["corridor_demand", "electrification"],
+    "source_refs": [],
+    "confidence": "low",
+    "authored_status": "hand_authored"
+  }
+]
