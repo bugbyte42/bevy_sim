@@ -68,7 +68,7 @@ The client starts with settlement inventory and an island containing forest, coa
 - `R`: cycle selected logistics route
 - `=` / `-`: increase or decrease selected route capacity
 
-The selected tile panel also exposes clickable build actions for valid facilities, so the number keys are shortcuts rather than the only way to play.
+The UI includes objectives, a next-move hint, selected-tile build actions, settlement stock, route status, and recipe graph inspection. The number keys are shortcuts rather than the only way to play.
 
 Resource extraction facilities output to their tile node. A low-capacity route moves goods back to the settlement, which makes transport bottlenecks visible before individual vehicles exist.
 When the win condition is reached, the left panel shows a run summary with completion tick, facilities, routes, produced goods, final settlement stock, and observed bottlenecks.

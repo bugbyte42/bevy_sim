@@ -334,7 +334,11 @@ fn selected_tile_actions(economy: &EconomyState, map: &IslandMap) -> Vec<BuildAc
             let enabled = status == "ready";
             Some(BuildActionView {
                 label: option.label.clone(),
-                text: format!("{} {} | {status} | cost {cost}", option.key, option.label),
+                text: format!(
+                    "{} {} | {status} | cost {cost}",
+                    option.key,
+                    display_label(&option.label)
+                ),
                 enabled,
             })
         })
@@ -361,30 +365,128 @@ fn inventory_panel(
 
     let mut output = String::new();
     output.push_str(&format!("{}\n", economy.scenario.display_name));
+    output.push_str(&run_overview(economy, clock, &selected));
+    output.push_str(&objective_panel(economy));
+    output.push_str(&next_step_panel(economy, map));
+    output.push_str("Controls\n");
+    output.push_str("- Space pause/resume | . step | [/] speed | F5 reset\n");
+    output.push_str("- Select tiles with the mouse; click builds or use number keys\n");
+    if let Some(summary) = &economy.run_summary {
+        output.push_str(&run_summary_panel(&economy.data, summary));
+    }
+    output.push_str(&selected_tile_panel(economy, map));
+    output.push_str(&settlement_stock_panel(economy));
+    output.push_str(&ledger_panel(economy));
+    output.push_str(&route_panel(economy, route_selection));
+    output.push_str(&recent_activity_panel(economy));
+
+    output
+}
+
+fn run_overview(economy: &EconomyState, clock: Option<&EconomyClock>, selected: &str) -> String {
+    let mut output = String::new();
+    output.push_str("Run\n");
     output.push_str(&format!(
-        "state: {} | tick: {} | speed: {:.2}s\n",
+        "- state: {} | tick: {} | speed: {:.2}s\n",
         run_state_label(economy.run_state),
         economy.world.tick.0,
         clock.map(EconomyClock::tick_seconds).unwrap_or_default()
     ));
-    output.push_str(&format!("selected: {selected}\n"));
-    for (commodity, current, target) in win_condition_progress(economy) {
-        output.push_str(&format!("{commodity}: {current:.1}/{target:.1}\n"));
-    }
+    output.push_str(&format!("- selected: {selected}\n"));
     output.push_str(&format!(
-        "facilities: {} | routes: {}\n",
+        "- facilities: {} | routes: {}\n",
         economy.world.facilities.len(),
         economy.world.edges.len()
     ));
-    output.push_str("controls: Space pause, . step, [/] speed, F5 reset\n");
-    if let Some(summary) = &economy.run_summary {
-        output.push_str(&run_summary_panel(&economy.data, summary));
-    }
-    output.push_str(&ledger_panel(economy));
-    output.push_str(&route_panel(economy, route_selection));
-    output.push_str(&selected_tile_panel(economy, map));
+    output
+}
 
-    output.push_str("\nSettlement inventory\n");
+fn objective_panel(economy: &EconomyState) -> String {
+    let mut output = String::new();
+    output.push_str("\nObjectives\n");
+    for (commodity, current, target) in win_condition_progress(economy) {
+        output.push_str(&format!(
+            "- {}: {current:.1}/{target:.1}\n",
+            display_commodity(&economy.data, &commodity)
+        ));
+    }
+    output
+}
+
+fn next_step_panel(economy: &EconomyState, map: &IslandMap) -> String {
+    let mut output = String::new();
+    output.push_str("\nNext Move\n");
+    output.push_str("- ");
+    output.push_str(&next_step_text(economy, map));
+    output.push('\n');
+    output
+}
+
+fn next_step_text(economy: &EconomyState, map: &IslandMap) -> String {
+    if economy.win_achieved {
+        return "Run complete. Review the summary or press F5 to try another run.".to_string();
+    }
+
+    if map.selected.and_then(|id| map.tile(id)).is_none() {
+        return "Select a land tile to see build actions.".to_string();
+    }
+
+    for (recipe, guidance) in [
+        (
+            "recipe.gather_wood.v1",
+            "Build a camp on a forest to grow the wood supply.",
+        ),
+        (
+            "recipe.mine_coal.v1",
+            "Build a coal mine, then route coal back to the settlement.",
+        ),
+        (
+            "recipe.burn_coal_for_heat.v1",
+            "Build a heat furnace at the settlement to turn coal into heat.",
+        ),
+        (
+            "recipe.generate_electricity_from_heat.v1",
+            "Build a generator at the settlement to produce electricity.",
+        ),
+        (
+            "recipe.mine_copper_ore.v1",
+            "Build a copper mine and move ore back to the settlement.",
+        ),
+        (
+            "recipe.smelt_copper.v1",
+            "Build a copper furnace at the settlement to make copper ingots.",
+        ),
+        (
+            "recipe.draw_copper_wire.v1",
+            "Build a wire workshop at the settlement to finish the copper wire chain.",
+        ),
+    ] {
+        if !has_active_recipe(economy, recipe) {
+            return guidance.to_string();
+        }
+    }
+
+    if economy.cumulative_ledger.blocked_demand().next().is_some() {
+        return "Something is blocked. Check selected facilities, routes, and the recipe graph."
+            .to_string();
+    }
+
+    "Let the economy run, then use the panels to chase the next bottleneck.".to_string()
+}
+
+fn has_active_recipe(economy: &EconomyState, recipe: &str) -> bool {
+    economy.world.facilities.values().any(|facility| {
+        facility
+            .active_recipe
+            .as_ref()
+            .map(|recipe_id| recipe_id.as_str() == recipe)
+            .unwrap_or(false)
+    })
+}
+
+fn settlement_stock_panel(economy: &EconomyState) -> String {
+    let mut output = String::new();
+    output.push_str("\nSettlement Stock\n");
     if let Some(inventory) = settlement_inventory(economy) {
         for commodity in [
             "resource.wood",
@@ -395,23 +497,28 @@ fn inventory_panel(
             "metal.copper",
             "component.copper_wire",
         ] {
-            let qty = inventory.get(&CommodityId::from(commodity));
-            output.push_str(&format!("{commodity}: {qty:.1}\n"));
+            let commodity = CommodityId::from(commodity);
+            let qty = inventory.get(&commodity);
+            output.push_str(&format!(
+                "- {}: {qty:.1}\n",
+                display_commodity(&economy.data, &commodity)
+            ));
         }
     }
+    output
+}
 
-    output.push_str("\nRecent status\n");
+fn recent_activity_panel(economy: &EconomyState) -> String {
+    let mut output = String::new();
+    output.push_str("\nRecent Status\n");
     for line in economy.status_log.iter().rev().take(4) {
-        output.push_str(line);
-        output.push('\n');
+        output.push_str(&format!("- {line}\n"));
     }
 
-    output.push_str("\nRecent sim events\n");
+    output.push_str("\nRecent Sim Events\n");
     for event in economy.last_report.iter().rev().take(5) {
-        output.push_str(&format_event(economy, event));
-        output.push('\n');
+        output.push_str(&format!("- {}\n", format_event(economy, event)));
     }
-
     output
 }
 
@@ -470,7 +577,7 @@ fn append_summary_stacks(
 
 fn route_panel(economy: &EconomyState, selection: &RouteSelection) -> String {
     let mut output = String::new();
-    output.push_str("\nSelected route\n");
+    output.push_str("\nSelected Route\n");
     let Some(edge_id) = selected_route_id(economy, Some(selection)) else {
         output.push_str("- none\n");
         return output;
@@ -481,10 +588,10 @@ fn route_panel(economy: &EconomyState, selection: &RouteSelection) -> String {
     };
     output.push_str(&format!("{}: {} -> {}\n", edge.id, edge.from, edge.to));
     output.push_str(&format!(
-        "capacity: {:.1}/tick | cost {:.1}\n",
+        "- capacity: {:.1}/tick | cost {:.1}\n",
         edge.capacity_per_tick, edge.distance_cost
     ));
-    output.push_str("controls: R route, = more, - less\n");
+    output.push_str("- controls: R route, = more, - less\n");
 
     let mut movement_count = 0;
     for event in &economy.last_report {
@@ -530,7 +637,7 @@ fn route_panel(economy: &EconomyState, selection: &RouteSelection) -> String {
 
 fn ledger_panel(economy: &EconomyState) -> String {
     let mut output = String::new();
-    output.push_str("\nLast tick ledger\n");
+    output.push_str("\nLast Tick Activity\n");
     if economy.last_ledger.is_empty() {
         output.push_str("- no movement yet\n");
         return output;
@@ -595,11 +702,11 @@ fn selected_tile_panel(economy: &EconomyState, map: &IslandMap) -> String {
     };
 
     let mut output = String::new();
-    output.push_str("\nSelected tile\n");
+    output.push_str("\nSelected Tile\n");
     if tile.facilities.is_empty() {
-        output.push_str("facilities: none\n");
+        output.push_str("- facilities: none\n");
     } else {
-        output.push_str("facilities\n");
+        output.push_str("Facilities\n");
         for facility_id in &tile.facilities {
             output.push_str(&format!(
                 "- {}\n",
@@ -608,7 +715,7 @@ fn selected_tile_panel(economy: &EconomyState, map: &IslandMap) -> String {
         }
     }
 
-    output.push_str("build options\n");
+    output.push_str("Available Builds\n");
     let options: Vec<_> = economy
         .scenario
         .build_options
@@ -639,7 +746,8 @@ fn selected_tile_panel(economy: &EconomyState, map: &IslandMap) -> String {
             .unwrap_or_else(|| "storage".to_string());
         output.push_str(&format!(
             "- {}: {status}; cost {}; recipe {recipe}\n",
-            option.label, cost
+            display_label(&option.label),
+            cost
         ));
     }
 
@@ -850,6 +958,20 @@ fn display_recipe(economy: &ValidatedEconomy, recipe: &RecipeId) -> String {
         .get(recipe)
         .map(|recipe_data| recipe_data.display_name.clone())
         .unwrap_or_else(|| recipe.to_string())
+}
+
+fn display_label(label: &str) -> String {
+    label
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn append_recipe_statuses(output: &mut String, economy: &EconomyState, recipes: &[RecipeId]) {
