@@ -1,7 +1,7 @@
 use crate::{
-    BlockReason, CommodityId, EPSILON, FacilityId, FacilityState, Inventory, RecipeBook, RecipeId,
-    TransportBlockReason, TransportEdge, TransportEdgeId, TransportNodeId, TransportNodeState,
-    TransportOrder, TransportOrderId,
+    BlockReason, CommodityId, CommodityLedger, EPSILON, FacilityId, FacilityState, Inventory,
+    RecipeBook, RecipeId, TransportBlockReason, TransportEdge, TransportEdgeId, TransportNodeId,
+    TransportNodeState, TransportOrder, TransportOrderId,
 };
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -57,6 +57,7 @@ pub enum TickEvent {
 pub struct TickReport {
     pub tick: Tick,
     pub events: Vec<TickEvent>,
+    pub ledger: CommodityLedger,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -145,15 +146,16 @@ impl SimWorld {
         let mut report = TickReport {
             tick: self.tick,
             events: Vec::new(),
+            ledger: CommodityLedger::default(),
         };
 
-        self.move_goods_between_nodes(&mut report.events);
-        self.advance_facilities(&mut report.events);
+        self.move_goods_between_nodes(&mut report);
+        self.advance_facilities(&mut report);
 
         report
     }
 
-    fn advance_facilities(&mut self, events: &mut Vec<TickEvent>) {
+    fn advance_facilities(&mut self, report: &mut TickReport) {
         let facility_ids: Vec<_> = self.facilities.keys().cloned().collect();
 
         for facility_id in facility_ids {
@@ -167,7 +169,7 @@ impl SimWorld {
             };
 
             let Some(recipe) = self.recipe_book.get(&recipe_id).cloned() else {
-                events.push(TickEvent::FacilityBlocked {
+                report.events.push(TickEvent::FacilityBlocked {
                     facility: facility_id,
                     recipe: recipe_id.clone(),
                     reasons: vec![BlockReason::MissingRecipe(recipe_id)],
@@ -188,7 +190,10 @@ impl SimWorld {
                 });
 
             if !reasons.is_empty() {
-                events.push(TickEvent::FacilityBlocked {
+                for reason in &reasons {
+                    record_blocked_reason(&mut report.ledger, reason);
+                }
+                report.events.push(TickEvent::FacilityBlocked {
                     facility: facility_id,
                     recipe: recipe_id,
                     reasons,
@@ -208,7 +213,7 @@ impl SimWorld {
                 )
             };
 
-            events.push(TickEvent::FacilityProgressed {
+            report.events.push(TickEvent::FacilityProgressed {
                 facility: facility_id.clone(),
                 recipe: recipe_id.clone(),
                 progress_ticks,
@@ -224,10 +229,19 @@ impl SimWorld {
                     && inventory.add_many(&recipe.outputs).is_ok()
                     && inventory.add_many(&recipe.byproducts).is_ok()
                 {
+                    for stack in &recipe.inputs {
+                        report.ledger.record_consumed(&stack.commodity, stack.qty);
+                    }
+                    for stack in &recipe.outputs {
+                        report.ledger.record_produced(&stack.commodity, stack.qty);
+                    }
+                    for stack in &recipe.byproducts {
+                        report.ledger.record_byproduct(&stack.commodity, stack.qty);
+                    }
                     if let Some(facility) = self.facilities.get_mut(&facility_id) {
                         facility.progress_ticks = 0;
                     }
-                    events.push(TickEvent::RecipeCompleted {
+                    report.events.push(TickEvent::RecipeCompleted {
                         facility: facility_id,
                         recipe: recipe_id,
                     });
@@ -236,7 +250,7 @@ impl SimWorld {
         }
     }
 
-    fn move_goods_between_nodes(&mut self, events: &mut Vec<TickEvent>) {
+    fn move_goods_between_nodes(&mut self, report: &mut TickReport) {
         let order_ids: Vec<_> = self.transport_orders.keys().cloned().collect();
 
         for order_id in order_ids {
@@ -244,7 +258,7 @@ impl SimWorld {
                 continue;
             };
             let Some(edge) = self.edges.get(&order.edge_id).cloned() else {
-                events.push(TickEvent::TransportBlocked {
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::MissingEdge(order.edge_id),
                 });
@@ -252,21 +266,21 @@ impl SimWorld {
             };
 
             if !edge.enabled {
-                events.push(TickEvent::TransportBlocked {
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::DisabledEdge,
                 });
                 continue;
             }
             if !edge.allows(&order.commodity) {
-                events.push(TickEvent::TransportBlocked {
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::CommodityNotAllowed(order.commodity),
                 });
                 continue;
             }
             if edge.capacity_per_tick <= EPSILON || order.max_qty_per_tick <= EPSILON {
-                events.push(TickEvent::TransportBlocked {
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::ZeroCapacity,
                 });
@@ -274,14 +288,14 @@ impl SimWorld {
             }
 
             let Some(from_node) = self.nodes.get(&edge.from) else {
-                events.push(TickEvent::TransportBlocked {
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::MissingNode(edge.from.clone()),
                 });
                 continue;
             };
             let Some(to_node) = self.nodes.get(&edge.to) else {
-                events.push(TickEvent::TransportBlocked {
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::MissingNode(edge.to.clone()),
                 });
@@ -292,14 +306,17 @@ impl SimWorld {
             let destination_qty = to_node.inventory.get(&order.commodity);
             let destination_need = (order.target_qty_at_destination - destination_qty).max(0.0);
             if destination_need <= EPSILON {
-                events.push(TickEvent::TransportBlocked {
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::DestinationAtTarget,
                 });
                 continue;
             }
             if available <= EPSILON {
-                events.push(TickEvent::TransportBlocked {
+                report
+                    .ledger
+                    .record_blocked_demand(&order.commodity, destination_need);
+                report.events.push(TickEvent::TransportBlocked {
                     order: order.id,
                     reason: TransportBlockReason::NoSourceInventory,
                 });
@@ -323,7 +340,8 @@ impl SimWorld {
                 continue;
             }
 
-            events.push(TickEvent::TransportMoved {
+            report.ledger.record_moved(&order.commodity, qty);
+            report.events.push(TickEvent::TransportMoved {
                 order: order.id,
                 edge: edge.id,
                 commodity: order.commodity,
@@ -331,6 +349,17 @@ impl SimWorld {
                 capacity_limited: requested > qty + EPSILON,
             });
         }
+    }
+}
+
+fn record_blocked_reason(ledger: &mut CommodityLedger, reason: &BlockReason) {
+    match reason {
+        BlockReason::MissingInput {
+            commodity,
+            required,
+            available,
+        } => ledger.record_blocked_demand(commodity, (required - available).max(0.0)),
+        BlockReason::MissingRecipe(_) => {}
     }
 }
 

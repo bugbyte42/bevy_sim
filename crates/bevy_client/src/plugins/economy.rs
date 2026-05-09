@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use sim_core::{
-    CommodityId, FacilityId, FacilityState, Inventory, SimWorld, Stack, TickEvent, TransportEdge,
-    TransportNodeId, TransportNodeState, TransportOrder,
+    CommodityId, CommodityLedger, FacilityId, FacilityState, Inventory, SimWorld, Stack, TickEvent,
+    TransportEdge, TransportNodeId, TransportNodeState, TransportOrder,
 };
 use sim_data::{
     BuildOption, FacilityNodePolicy, Quantity, Scenario, ValidatedEconomy, WinMetric,
@@ -20,6 +20,8 @@ pub struct EconomyState {
     pub scenario: Scenario,
     pub world: SimWorld,
     pub produced_totals: Inventory,
+    pub last_ledger: CommodityLedger,
+    pub cumulative_ledger: CommodityLedger,
     pub last_report: Vec<TickEvent>,
     pub status_log: Vec<String>,
     pub build_counter: u64,
@@ -77,6 +79,8 @@ fn setup_economy(mut commands: Commands, map: Res<IslandMap>) {
         scenario,
         world,
         produced_totals: Inventory::new(),
+        last_ledger: CommodityLedger::default(),
+        cumulative_ledger: CommodityLedger::default(),
         last_report: Vec::new(),
         status_log: vec!["Copper Island initialized".to_string()],
         build_counter: 0,
@@ -94,6 +98,8 @@ fn advance_economy(
     }
 
     let report = economy.world.tick();
+    economy.last_ledger = report.ledger.clone();
+    fold_ledger(&mut economy.cumulative_ledger, &report.ledger);
     economy.last_report = report.events.clone();
 
     let completed_recipes: Vec<_> = economy
@@ -117,6 +123,24 @@ fn advance_economy(
             &mut economy.status_log,
             "Win condition reached: power and wire targets met".to_string(),
         );
+    }
+}
+
+fn fold_ledger(total: &mut CommodityLedger, tick: &CommodityLedger) {
+    for (commodity, qty) in tick.produced() {
+        total.record_produced(commodity, qty);
+    }
+    for (commodity, qty) in tick.consumed() {
+        total.record_consumed(commodity, qty);
+    }
+    for (commodity, qty) in tick.byproducts() {
+        total.record_byproduct(commodity, qty);
+    }
+    for (commodity, qty) in tick.moved_in() {
+        total.record_moved(commodity, qty);
+    }
+    for (commodity, qty) in tick.blocked_demand() {
+        total.record_blocked_demand(commodity, qty);
     }
 }
 

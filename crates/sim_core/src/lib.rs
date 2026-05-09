@@ -7,6 +7,7 @@ mod facility;
 mod graph;
 mod ids;
 mod inventory;
+mod ledger;
 mod logistics;
 mod recipe;
 mod world;
@@ -21,6 +22,7 @@ pub use ids::{
     TransportNodeId, TransportOrderId,
 };
 pub use inventory::Inventory;
+pub use ledger::CommodityLedger;
 pub use logistics::{TransportBlockReason, TransportEdge, TransportNodeState, TransportOrder};
 pub use recipe::{Recipe, RecipeBook, Stack};
 pub use world::{SimError, SimWorld, Tick, TickEvent, TickReport};

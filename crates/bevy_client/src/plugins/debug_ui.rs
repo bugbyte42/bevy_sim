@@ -122,6 +122,7 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
     if economy.win_achieved {
         output.push_str("state: win condition reached\n");
     }
+    output.push_str(&ledger_panel(economy));
     output.push_str(&selected_tile_panel(economy, map));
 
     output.push_str("\nSettlement inventory\n");
@@ -153,6 +154,67 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
     }
 
     output
+}
+
+fn ledger_panel(economy: &EconomyState) -> String {
+    let mut output = String::new();
+    output.push_str("\nLast tick ledger\n");
+    if economy.last_ledger.is_empty() {
+        output.push_str("- no movement yet\n");
+        return output;
+    }
+    append_ledger_section(
+        &mut output,
+        &economy.data,
+        "produced",
+        economy.last_ledger.produced(),
+    );
+    append_ledger_section(
+        &mut output,
+        &economy.data,
+        "consumed",
+        economy.last_ledger.consumed(),
+    );
+    append_ledger_section(
+        &mut output,
+        &economy.data,
+        "byproducts",
+        economy.last_ledger.byproducts(),
+    );
+    append_ledger_section(
+        &mut output,
+        &economy.data,
+        "moved",
+        economy.last_ledger.moved_in(),
+    );
+    append_ledger_section(
+        &mut output,
+        &economy.data,
+        "blocked",
+        economy.last_ledger.blocked_demand(),
+    );
+    output
+}
+
+fn append_ledger_section<'a>(
+    output: &mut String,
+    economy: &ValidatedEconomy,
+    label: &str,
+    quantities: impl Iterator<Item = (&'a CommodityId, f64)>,
+) {
+    let quantities: Vec<_> = quantities.collect();
+    if quantities.is_empty() {
+        return;
+    }
+    output.push_str(label);
+    output.push('\n');
+    for (commodity, qty) in quantities.into_iter().take(4) {
+        output.push_str(&format!(
+            "- {} {:.1}\n",
+            display_commodity(economy, commodity),
+            qty
+        ));
+    }
 }
 
 fn selected_tile_panel(economy: &EconomyState, map: &IslandMap) -> String {
