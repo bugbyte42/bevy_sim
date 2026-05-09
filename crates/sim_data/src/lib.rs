@@ -194,6 +194,7 @@ pub struct ValidatedEconomy {
     pub canonical: CanonicalEconomy,
     pub commodities_by_id: BTreeMap<CommodityId, Commodity>,
     pub facilities_by_id: BTreeMap<FacilityArchetypeId, FacilityArchetype>,
+    pub recipes_by_id: BTreeMap<RecipeId, ProcessRecipe>,
     pub scenarios_by_id: BTreeMap<String, Scenario>,
     pub recipe_book: RecipeBook,
 }
@@ -317,6 +318,7 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
     let mut errors = Vec::new();
     let commodities_by_id = collect_commodities(&economy.commodities, &mut errors);
     let recipe_ids = collect_recipe_ids(&economy.recipes, &mut errors);
+    let recipes_by_id = collect_recipes(&economy.recipes);
     let facilities_by_id = collect_facilities(&economy.facilities, &mut errors);
     let region_ids = collect_regions(&economy.regions, &mut errors);
     let scenarios_by_id = collect_scenarios(&economy.scenarios, &mut errors);
@@ -505,6 +507,7 @@ pub fn validate_canonical(economy: CanonicalEconomy) -> Result<ValidatedEconomy,
         canonical: economy,
         commodities_by_id,
         facilities_by_id,
+        recipes_by_id,
         scenarios_by_id,
         recipe_book,
     })
@@ -602,6 +605,13 @@ fn collect_recipe_ids(
         }
     }
     seen
+}
+
+fn collect_recipes(recipes: &[ProcessRecipe]) -> BTreeMap<RecipeId, ProcessRecipe> {
+    recipes
+        .iter()
+        .map(|recipe| (recipe.id.clone(), recipe.clone()))
+        .collect()
 }
 
 fn collect_facilities(

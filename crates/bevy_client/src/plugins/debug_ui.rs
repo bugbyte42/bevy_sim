@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use sim_core::{
-    BlockReason, CommodityId, Inventory, RecipeId, Stack, TickEvent, TransportBlockReason,
+    BlockReason, CommodityId, FacilityState, Inventory, RecipeId, Stack, TickEvent,
+    TransportBlockReason,
 };
 use sim_data::{BuildOption, FacilityArchetype, Quantity, ValidatedEconomy};
 
@@ -147,7 +148,7 @@ fn inventory_panel(economy: &EconomyState, map: &IslandMap) -> String {
 
     output.push_str("\nRecent sim events\n");
     for event in economy.last_report.iter().rev().take(5) {
-        output.push_str(&format_event(event));
+        output.push_str(&format_event(economy, event));
         output.push('\n');
     }
 
@@ -166,14 +167,10 @@ fn selected_tile_panel(economy: &EconomyState, map: &IslandMap) -> String {
     } else {
         output.push_str("facilities\n");
         for facility_id in &tile.facilities {
-            let display = economy
-                .world
-                .facilities
-                .get(facility_id)
-                .and_then(|facility| economy.data.facilities_by_id.get(&facility.archetype_id))
-                .map(|archetype| archetype.display_name.as_str())
-                .unwrap_or(facility_id.as_str());
-            output.push_str(&format!("- {display}\n"));
+            output.push_str(&format!(
+                "- {}\n",
+                facility_status_text(economy, facility_id.as_str())
+            ));
         }
     }
 
@@ -258,6 +255,71 @@ fn build_status(
     }
 }
 
+fn facility_status_text(economy: &EconomyState, facility_id: &str) -> String {
+    let Some(facility) = economy
+        .world
+        .facilities
+        .values()
+        .find(|facility| facility.id.as_str() == facility_id)
+    else {
+        return facility_id.to_string();
+    };
+
+    let facility_name = economy
+        .data
+        .facilities_by_id
+        .get(&facility.archetype_id)
+        .map(|archetype| archetype.display_name.as_str())
+        .unwrap_or(facility.id.as_str());
+
+    let Some(recipe_id) = &facility.active_recipe else {
+        return format!("{facility_name}: idle");
+    };
+
+    let recipe_label = display_recipe(&economy.data, recipe_id);
+    let Some(recipe) = economy.world.recipe_book.get(recipe_id) else {
+        return format!("{facility_name}: missing recipe {recipe_id}");
+    };
+
+    let progress = format!(
+        "{}/{}",
+        facility.progress_ticks.min(recipe.duration_ticks),
+        recipe.duration_ticks
+    );
+    match facility_blockers(economy, facility) {
+        Ok(blockers) if blockers.is_empty() => {
+            format!("{facility_name}: {recipe_label} {progress}")
+        }
+        Ok(blockers) => {
+            let first = blockers
+                .first()
+                .map(|blocker| format_blocker(economy, blocker))
+                .unwrap_or_else(|| "unknown".to_string());
+            format!("{facility_name}: {recipe_label} blocked ({first})")
+        }
+        Err(reason) => format!("{facility_name}: {recipe_label} blocked ({reason})"),
+    }
+}
+
+fn facility_blockers(
+    economy: &EconomyState,
+    facility: &FacilityState,
+) -> Result<Vec<BlockReason>, String> {
+    let Some(recipe_id) = &facility.active_recipe else {
+        return Ok(Vec::new());
+    };
+    let recipe = economy
+        .world
+        .recipe_book
+        .get(recipe_id)
+        .ok_or_else(|| format!("missing recipe {recipe_id}"))?;
+    let inventory = economy
+        .world
+        .inventory_for(facility.node.as_ref())
+        .map_err(|err| err.to_string())?;
+    Ok(recipe.blocked_reasons(inventory))
+}
+
 fn cost_text(economy: &ValidatedEconomy, archetype: &FacilityArchetype) -> String {
     if archetype.build_cost.is_empty() {
         return "none".to_string();
@@ -303,7 +365,7 @@ fn graph_panel(economy: &EconomyState, selection: &RecipeGraphSelection) -> Stri
                 output.push_str("ready\n");
             } else {
                 for blocker in blockers {
-                    output.push_str(&format_blocker(&blocker));
+                    output.push_str(&format_blocker(economy, &blocker));
                     output.push('\n');
                 }
             }
@@ -321,6 +383,14 @@ fn display_commodity(economy: &ValidatedEconomy, commodity: &CommodityId) -> Str
         .unwrap_or_else(|| commodity.to_string())
 }
 
+fn display_recipe(economy: &ValidatedEconomy, recipe: &RecipeId) -> String {
+    economy
+        .recipes_by_id
+        .get(recipe)
+        .map(|recipe_data| recipe_data.display_name.clone())
+        .unwrap_or_else(|| recipe.to_string())
+}
+
 fn append_recipe_ids(output: &mut String, recipes: &[RecipeId]) {
     if recipes.is_empty() {
         output.push_str("none\n");
@@ -332,27 +402,36 @@ fn append_recipe_ids(output: &mut String, recipes: &[RecipeId]) {
     }
 }
 
-fn format_event(event: &TickEvent) -> String {
+fn format_event(economy: &EconomyState, event: &TickEvent) -> String {
     match event {
         TickEvent::FacilityProgressed {
             facility,
             recipe,
             progress_ticks,
             duration_ticks,
-        } => format!("{facility}: {recipe} {progress_ticks}/{duration_ticks}"),
+        } => format!(
+            "{facility}: {} {progress_ticks}/{duration_ticks}",
+            display_recipe(&economy.data, recipe)
+        ),
         TickEvent::FacilityBlocked {
             facility,
             recipe,
             reasons,
-        } => format!(
-            "{facility}: {recipe} blocked ({})",
-            reasons
+        } => {
+            let blocker = reasons
                 .first()
-                .map(format_blocker)
-                .unwrap_or_else(|| "unknown".to_string())
-        ),
+                .map(|blocker| format_blocker(economy, blocker))
+                .unwrap_or_else(|| "unknown".to_string());
+            format!(
+                "{facility}: {} blocked ({blocker})",
+                display_recipe(&economy.data, recipe)
+            )
+        }
         TickEvent::RecipeCompleted { facility, recipe } => {
-            format!("{facility}: completed {recipe}")
+            format!(
+                "{facility}: completed {}",
+                display_recipe(&economy.data, recipe)
+            )
         }
         TickEvent::TransportMoved {
             commodity,
@@ -361,9 +440,15 @@ fn format_event(event: &TickEvent) -> String {
             ..
         } => {
             if *capacity_limited {
-                format!("route moved {qty:.1} {commodity} (capacity limited)")
+                format!(
+                    "route moved {qty:.1} {} (capacity limited)",
+                    display_commodity(&economy.data, commodity)
+                )
             } else {
-                format!("route moved {qty:.1} {commodity}")
+                format!(
+                    "route moved {qty:.1} {}",
+                    display_commodity(&economy.data, commodity)
+                )
             }
         }
         TickEvent::TransportBlocked { reason, .. } => match reason {
@@ -378,19 +463,25 @@ fn format_event(event: &TickEvent) -> String {
             TransportBlockReason::MissingEdge(edge) => format!("route missing edge {edge}"),
             TransportBlockReason::MissingNode(node) => format!("route missing node {node}"),
             TransportBlockReason::CommodityNotAllowed(commodity) => {
-                format!("route blocks {commodity}")
+                format!(
+                    "route blocks {}",
+                    display_commodity(&economy.data, commodity)
+                )
             }
         },
     }
 }
 
-fn format_blocker(reason: &BlockReason) -> String {
+fn format_blocker(economy: &EconomyState, reason: &BlockReason) -> String {
     match reason {
         BlockReason::MissingInput {
             commodity,
             required,
             available,
-        } => format!("needs {required:.1} {commodity}, has {available:.1}"),
+        } => format!(
+            "needs {required:.1} {}, has {available:.1}",
+            display_commodity(&economy.data, commodity)
+        ),
         BlockReason::MissingRecipe(recipe) => format!("missing recipe {recipe}"),
     }
 }
